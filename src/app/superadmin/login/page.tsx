@@ -74,7 +74,7 @@ export default function SuperAdminLogin() {
                   required
                   className="input pl-10"
                   style={{ paddingLeft: "2.5rem" }}
-                  placeholder="super@restroerp.com"
+                  placeholder="super@foodsupplyerp.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />

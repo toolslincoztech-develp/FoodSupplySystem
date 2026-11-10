@@ -435,7 +435,7 @@ export default function POSPage() {
             ) : null}
             <div className="flex items-center gap-2 text-primary">
               <UtensilsCrossed size={24} />
-              <h1 className="font-bold text-lg lg:text-xl text-foreground tracking-tight hidden sm:block">Restaurant POS</h1>
+              <h1 className="font-bold text-lg lg:text-xl text-foreground tracking-tight hidden sm:block">Food Supply POS</h1>
             </div>
           </div>
 
@@ -735,7 +735,7 @@ export default function POSPage() {
                       <p className="text-xs text-muted mt-0.5">
                         {closingData ? (
                           <>
-                            {closingData.restaurant?.name || "Restaurant"} • Date: <span className="font-semibold text-foreground">{closingData.date ? new Date(closingData.date).toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }) : new Date().toLocaleDateString()}</span> • Cashier: <span className="font-semibold text-primary">{closingScope === "all" ? "All Cashiers (Terminal)" : (closingData.cashier?.name || "Cashier")}</span>
+                            {closingData.restaurant?.name || "Food Supply"} • Date: <span className="font-semibold text-foreground">{closingData.date ? new Date(closingData.date).toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }) : new Date().toLocaleDateString()}</span> • Cashier: <span className="font-semibold text-primary">{closingScope === "all" ? "All Cashiers (Terminal)" : (closingData.cashier?.name || "Cashier")}</span>
                           </>
                         ) : (
                           "Shift settlement, items sold count, and daily sales summary"

@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     const slugRaw = body?.slug;
 
     if (!pinRaw || !slugRaw || typeof pinRaw !== "string" || typeof slugRaw !== "string") {
-      return NextResponse.json({ error: "PIN and Restaurant Code are required" }, { status: 400 });
+      return NextResponse.json({ error: "PIN and Food Supply Code are required" }, { status: 400 });
     }
 
     const pin = pinRaw.trim();
@@ -29,15 +29,15 @@ export async function POST(req: Request) {
     });
 
     if (!restaurant) {
-      return NextResponse.json({ error: "Invalid Restaurant Code" }, { status: 404 });
+      return NextResponse.json({ error: "Invalid Food Supply Code" }, { status: 404 });
     }
 
     if (restaurant.status !== "ACTIVE") {
-      return NextResponse.json({ error: "Restaurant account is suspended or inactive" }, { status: 403 });
+      return NextResponse.json({ error: "Food supply account is suspended or inactive" }, { status: 403 });
     }
 
     if (restaurant.validUntil && new Date(restaurant.validUntil) < new Date()) {
-      return NextResponse.json({ error: "Restaurant subscription license has expired" }, { status: 403 });
+      return NextResponse.json({ error: "Food supply subscription license has expired" }, { status: 403 });
     }
 
     const posUsers = await prisma.user.findMany({

@@ -82,12 +82,12 @@ export function Sidebar() {
           <img src={profile.restaurant.logoUrl} alt="Logo" className="w-9 h-9 object-contain rounded-lg bg-white" />
         ) : (
           <div className="w-8 h-8 rounded-lg bg-gradient-primary flex items-center justify-center text-white font-bold text-sm">
-            {profile?.restaurant?.name?.charAt(0) || "R"}
+            {profile?.restaurant?.name?.charAt(0) || "F"}
           </div>
         )}
         <div className="overflow-hidden">
           <h1 className="font-bold text-foreground text-sm leading-tight tracking-tight truncate max-w-[150px]">
-            {profile?.restaurant?.name || "RestaurantERP"}
+            {profile?.restaurant?.name || "FoodSupplyERP"}
           </h1>
           <p className="text-[10px] text-muted uppercase font-semibold tracking-wider">Enterprise</p>
         </div>

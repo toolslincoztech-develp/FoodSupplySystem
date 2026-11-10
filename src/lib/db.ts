@@ -4,9 +4,30 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
+function getDatasourceUrl(): string | undefined {
+  const raw = process.env.DATABASE_URL;
+  if (!raw) return undefined;
+
+  try {
+    const parsed = new URL(raw);
+    const isPooler = parsed.port === "6543" || parsed.hostname.includes("pooler.supabase.com");
+    if (isPooler && !parsed.searchParams.has("pgbouncer")) {
+      parsed.searchParams.set("pgbouncer", "true");
+      return parsed.toString();
+    }
+  } catch {
+    return raw;
+  }
+
+  return raw;
+}
+
+const datasourceUrl = getDatasourceUrl();
+
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
+    ...(datasourceUrl ? { datasources: { db: { url: datasourceUrl } } } : {}),
     log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
   });
 

@@ -18,6 +18,7 @@ export default function SuperAdminDashboard() {
   const [taxRate, setTaxRate] = useState<number>(16);
   const [submitting, setSubmitting] = useState(false);
   const [editingFeatures, setEditingFeatures] = useState<any>(null);
+  const [savingFeatures, setSavingFeatures] = useState(false);
 
   // Edit Admin State
   const [editingAdmin, setEditingAdmin] = useState<any>(null);
@@ -29,12 +30,12 @@ export default function SuperAdminDashboard() {
 
   const handleDeleteRestaurant = async (restaurantId: string, restaurantName: string) => {
     const confirmation = window.prompt(
-      `⚠️ CRITICAL: You are about to permanently delete restaurant "${restaurantName}" and all its branches, staff accounts, menus, tables, and orders.\n\nTo confirm, type the restaurant name "${restaurantName}" below:`
+      `⚠️ CRITICAL: You are about to permanently delete food supply "${restaurantName}" and all its branches, staff accounts, menus, tables, and orders.\n\nTo confirm, type the food supply name "${restaurantName}" below:`
     );
 
     if (confirmation !== restaurantName) {
       if (confirmation !== null) {
-        alert("Deletion cancelled. Restaurant name did not match.");
+        alert("Deletion cancelled. Food supply name did not match.");
       }
       return;
     }
@@ -47,7 +48,7 @@ export default function SuperAdminDashboard() {
       const data = await res.json();
 
       if (res.ok) {
-        alert(data.message || "Restaurant deleted successfully.");
+        alert(data.message || "Food supply deleted successfully.");
         setEditingAdmin(null);
         setEditingFeatures(null);
         fetchClients();
@@ -77,6 +78,7 @@ export default function SuperAdminDashboard() {
   };
 
   const handleUpdateClient = async (id: string, data: any) => {
+    setSavingFeatures(true);
     try {
       const res = await fetch("/api/superadmin/clients", {
         method: "PATCH",
@@ -85,10 +87,19 @@ export default function SuperAdminDashboard() {
       });
       if (res.ok) {
         setEditingFeatures(null);
-        fetchClients();
+        await fetchClients();
+      } else {
+        let errorMsg = "Failed to update food supply";
+        try {
+          const errData = await res.json();
+          errorMsg = errData.error || errorMsg;
+        } catch {}
+        alert(errorMsg);
       }
     } catch (error) {
-      alert("Failed to update client");
+      alert("Failed to update food supply");
+    } finally {
+      setSavingFeatures(false);
     }
   };
 
@@ -118,7 +129,7 @@ export default function SuperAdminDashboard() {
       });
       const data = await res.json();
       if (res.ok) {
-        alert("Restaurant admin details updated successfully!");
+        alert("Food supply admin details updated successfully!");
         setEditingAdmin(null);
         fetchClients();
       } else {
@@ -186,7 +197,7 @@ export default function SuperAdminDashboard() {
           <h1 className="text-3xl font-bold tracking-tight mb-1 flex items-center gap-3">
             <ShieldCheck className="text-primary w-8 h-8" /> Lincoz Tech Master Control
           </h1>
-          <p className="text-muted">Manage restaurant tenants, branches, and active licenses.</p>
+          <p className="text-muted">Manage food supply tenants, branches, and active licenses.</p>
         </div>
         <div className="flex items-center gap-3">
           <button 
@@ -225,23 +236,23 @@ export default function SuperAdminDashboard() {
 
       {isAdding && (
         <div className="glass-card p-6 mb-8 animate-fade-in border border-primary/20 bg-primary-muted/5 shadow-xl">
-          <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><Building2 size={20} /> Register New Restaurant</h2>
+          <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><Building2 size={20} /> Register New Food Supply</h2>
           <form onSubmit={handleAddClient} className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className="block text-sm font-semibold mb-1">Restaurant Name</label>
-              <input type="text" required value={name} onChange={e => setName(e.target.value)} className="input bg-surface border-border w-full" placeholder="e.g. Pizza Palace" />
+              <label className="block text-sm font-semibold mb-1">Food Supply Name</label>
+              <input type="text" required value={name} onChange={e => setName(e.target.value)} className="input bg-surface border-border w-full" placeholder="e.g. Fresh Foods" />
             </div>
             <div>
               <label className="block text-sm font-semibold mb-1">Subdomain / Tenant Code</label>
               <div className="relative">
                 <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={16} />
-                <input type="text" required value={slug} onChange={e => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))} className="input pl-10 bg-surface border-border w-full" placeholder="pizza-palace" />
+                <input type="text" required value={slug} onChange={e => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))} className="input pl-10 bg-surface border-border w-full" placeholder="fresh-foods" />
               </div>
-              <p className="text-[10px] text-muted mt-1">This will be used for their login code (e.g. pizza-palace).</p>
+              <p className="text-[10px] text-muted mt-1">This will be used for their login code (e.g. fresh-foods).</p>
             </div>
             <div>
               <label className="block text-sm font-semibold mb-1">Owner Email</label>
-              <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="input bg-surface border-border w-full" placeholder="owner@pizza.com" />
+              <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="input bg-surface border-border w-full" placeholder="owner@foodsupply.com" />
             </div>
             <div>
               <label className="block text-sm font-semibold mb-1">Initial Password</label>
@@ -253,7 +264,7 @@ export default function SuperAdminDashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <span className="font-semibold text-sm text-foreground">Include Tax / GST in Bills</span>
-                  <p className="text-xs text-muted">Add automatic tax calculation to customer receipts for this restaurant</p>
+                  <p className="text-xs text-muted">Add automatic tax calculation to customer receipts for this food supply</p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input 
@@ -290,7 +301,7 @@ export default function SuperAdminDashboard() {
 
             <div className="md:col-span-2 mt-2 pt-4 border-t border-border">
               <button disabled={submitting} type="submit" className="btn btn-primary w-full md:w-auto px-8 h-12 text-base">
-                {submitting ? "Creating Infrastructure..." : "Deploy Restaurant"}
+                {submitting ? "Creating Infrastructure..." : "Deploy Food Supply"}
               </button>
             </div>
           </form>
@@ -299,7 +310,7 @@ export default function SuperAdminDashboard() {
 
       <div className="glass-card overflow-hidden">
         <div className="p-4 border-b border-border bg-surface-2 flex items-center justify-between">
-          <h2 className="font-bold flex items-center gap-2"><Building2 size={18} /> Registered Restaurants</h2>
+          <h2 className="font-bold flex items-center gap-2"><Building2 size={18} /> Registered Food Supplies</h2>
           <div className="text-xs text-muted font-semibold bg-surface px-3 py-1.5 rounded-md border border-border">
             Total Database Tenants: {clients.length}
           </div>
@@ -395,7 +406,7 @@ export default function SuperAdminDashboard() {
                   <button 
                     onClick={() => handleDeleteRestaurant(client.id, client.name)}
                     className="p-1.5 text-muted hover:text-danger hover:bg-danger-muted/20 rounded-md transition-colors inline-flex items-center align-middle cursor-pointer"
-                    title="Delete Restaurant"
+                    title="Delete Food Supply"
                   >
                     <Trash2 size={15} />
                   </button>
@@ -409,7 +420,7 @@ export default function SuperAdminDashboard() {
       {/* Feature Management Modal */}
       {editingFeatures && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="glass-card w-full max-w-md p-6 shadow-2xl animate-scale-in">
+          <div className="glass-card w-full max-w-md max-h-[90vh] overflow-y-auto p-6 shadow-2xl animate-scale-in">
             <h2 className="text-xl font-bold mb-1">Manage Features</h2>
             <p className="text-sm text-muted mb-6">{editingFeatures.name}</p>
             
@@ -427,7 +438,7 @@ export default function SuperAdminDashboard() {
                     <input 
                       type="checkbox" 
                       className="sr-only peer" 
-                      checked={editingFeatures[feat.id]} 
+                      checked={Boolean(editingFeatures[feat.id])} 
                       onChange={(e) => {
                         setEditingFeatures({ ...editingFeatures, [feat.id]: e.target.checked });
                       }}
@@ -480,28 +491,42 @@ export default function SuperAdminDashboard() {
 
             <div className="mt-8 flex gap-3">
               <button 
+                type="button"
+                disabled={savingFeatures}
                 onClick={() => setEditingFeatures(null)}
                 className="btn btn-ghost flex-1"
               >
                 Cancel
               </button>
               <button 
-                onClick={() => handleUpdateClient(editingFeatures.id, editingFeatures)}
+                type="button"
+                disabled={savingFeatures}
+                onClick={() =>
+                  handleUpdateClient(editingFeatures.id, {
+                    hasHR: Boolean(editingFeatures.hasHR),
+                    hasInventory: Boolean(editingFeatures.hasInventory),
+                    hasKDS: Boolean(editingFeatures.hasKDS),
+                    hasDelivery: Boolean(editingFeatures.hasDelivery),
+                    hasTables: Boolean(editingFeatures.hasTables),
+                    hasTax: Boolean(editingFeatures.hasTax),
+                    taxRate: editingFeatures.hasTax ? Math.max(0, Number(editingFeatures.taxRate || 0)) : 0,
+                  })
+                }
                 className="btn btn-primary flex-1"
               >
-                Save Changes
+                {savingFeatures ? "Saving..." : "Save Changes"}
               </button>
             </div>
 
-            {/* Danger Zone: Delete Restaurant */}
+            {/* Danger Zone: Delete Food Supply */}
             <div className="pt-4 border-t border-danger/20 mt-6 bg-danger-muted/10 p-3.5 rounded-xl border border-danger/20">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-bold text-danger flex items-center gap-1.5">
-                    <AlertTriangle size={14} /> Delete Restaurant
+                    <AlertTriangle size={14} /> Delete Food Supply
                   </p>
                   <p className="text-[11px] text-muted mt-0.5">
-                    Permanently delete this restaurant tenant and all data.
+                    Permanently delete this food supply tenant and all data.
                   </p>
                 </div>
                 <button
@@ -525,10 +550,10 @@ export default function SuperAdminDashboard() {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-xl font-bold flex items-center gap-2">
-                  <UserCog size={22} className="text-primary" /> Edit Restaurant Admin
+                  <UserCog size={22} className="text-primary" /> Edit Food Supply Admin
                 </h2>
                 <p className="text-xs text-muted mt-0.5">
-                  Restaurant: <span className="font-semibold text-foreground">{editingAdmin.name}</span> ({editingAdmin.slug})
+                  Food Supply: <span className="font-semibold text-foreground">{editingAdmin.name}</span> ({editingAdmin.slug})
                 </p>
               </div>
               <button 
@@ -566,7 +591,7 @@ export default function SuperAdminDashboard() {
                     value={adminEmail}
                     onChange={e => setAdminEmail(e.target.value)}
                     className="input pl-10 bg-surface-2 border-border w-full text-sm font-semibold"
-                    placeholder="owner@restaurant.com"
+                    placeholder="owner@foodsupply.com"
                   />
                 </div>
                 <p className="text-[11px] text-muted mt-1">This email is used by the admin to sign in to the back-office portal.</p>
@@ -606,12 +631,12 @@ export default function SuperAdminDashboard() {
                 </button>
               </div>
 
-              {/* Danger Zone: Delete Restaurant */}
+              {/* Danger Zone: Delete Food Supply */}
               <div className="pt-4 border-t border-danger/20 mt-6 bg-danger-muted/10 p-3.5 rounded-xl border border-danger/20">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-xs font-bold text-danger flex items-center gap-1.5">
-                      <AlertTriangle size={14} /> Delete Restaurant
+                      <AlertTriangle size={14} /> Delete Food Supply
                     </p>
                     <p className="text-[11px] text-muted mt-0.5">
                       Permanently wipe this tenant, staff, menu items, and order history.

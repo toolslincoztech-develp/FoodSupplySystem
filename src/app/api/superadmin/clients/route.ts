@@ -89,7 +89,7 @@ export async function POST(req: Request) {
             role: "OWNER" 
           }]
         }
-      } as any
+      }
     });
 
     // We must link the new user to the branch since they need a branchId for POS
@@ -102,14 +102,6 @@ export async function POST(req: Request) {
         where: { id: user.id },
         data: { branchId: branch.id }
       });
-    }
-
-    if (hasTax) {
-      await prisma.$executeRaw`
-        UPDATE "Restaurant" 
-        SET "hasTax" = true, "taxRate" = ${Math.max(0, Number(taxRate || 0))}
-        WHERE id = ${restaurant.id}
-      `;
     }
 
     return NextResponse.json({ success: true, data: restaurant });
@@ -134,26 +126,39 @@ export async function PATCH(req: Request) {
     const body = await req.json();
     const { id, hasHR, hasInventory, hasKDS, hasDelivery, hasTables, hasTax, taxRate, status, validUntil } = body;
 
+    if (!id || typeof id !== "string") {
+      return NextResponse.json({ error: "Food Supply ID is required" }, { status: 400 });
+    }
+
+    const parsedTaxRate = taxRate !== undefined ? Number(taxRate) : undefined;
+    const safeTaxRate =
+      parsedTaxRate !== undefined && Number.isFinite(parsedTaxRate)
+        ? Math.max(0, Math.min(100, parsedTaxRate))
+        : undefined;
+
+    const data: Record<string, any> = {};
+    if (hasHR !== undefined) data.hasHR = Boolean(hasHR);
+    if (hasInventory !== undefined) data.hasInventory = Boolean(hasInventory);
+    if (hasKDS !== undefined) data.hasKDS = Boolean(hasKDS);
+    if (hasDelivery !== undefined) data.hasDelivery = Boolean(hasDelivery);
+    if (hasTables !== undefined) data.hasTables = Boolean(hasTables);
+    if (hasTax !== undefined) {
+      data.hasTax = Boolean(hasTax);
+      if (!data.hasTax) {
+        data.taxRate = 0;
+      } else if (safeTaxRate !== undefined) {
+        data.taxRate = safeTaxRate;
+      }
+    } else if (safeTaxRate !== undefined) {
+      data.taxRate = safeTaxRate;
+    }
+    if (status !== undefined) data.status = status;
+    if (validUntil) data.validUntil = new Date(validUntil);
+
     const updated = await prisma.restaurant.update({
       where: { id },
-      data: {
-        hasHR,
-        hasInventory,
-        hasKDS,
-        hasDelivery,
-        hasTables,
-        status,
-        validUntil: validUntil ? new Date(validUntil) : undefined
-      }
+      data
     });
-
-    if (hasTax !== undefined || taxRate !== undefined) {
-      await prisma.$executeRaw`
-        UPDATE "Restaurant" 
-        SET "hasTax" = ${Boolean(hasTax)}, "taxRate" = ${Math.max(0, Number(taxRate || 0))}
-        WHERE id = ${id}
-      `;
-    }
 
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
@@ -177,7 +182,7 @@ export async function PUT(req: Request) {
     const { restaurantId, userId, name, email, password } = body;
 
     if (!restaurantId || !name || !email) {
-      return NextResponse.json({ error: "Restaurant ID, Admin Name, and Email are required" }, { status: 400 });
+      return NextResponse.json({ error: "Food Supply ID, Admin Name, and Email are required" }, { status: 400 });
     }
 
     const trimmedEmail = String(email).trim().toLowerCase();
@@ -188,7 +193,7 @@ export async function PUT(req: Request) {
       where: { id: restaurantId }
     });
     if (!restaurant) {
-      return NextResponse.json({ error: "Restaurant not found" }, { status: 404 });
+      return NextResponse.json({ error: "Food supply not found" }, { status: 404 });
     }
 
     // Find the target admin user for this restaurant
@@ -290,7 +295,7 @@ export async function DELETE(req: Request) {
     const id = searchParams.get("id");
 
     if (!id) {
-      return NextResponse.json({ error: "Restaurant ID is required" }, { status: 400 });
+      return NextResponse.json({ error: "Food Supply ID is required" }, { status: 400 });
     }
 
     const restaurant = await prisma.restaurant.findUnique({
@@ -298,7 +303,7 @@ export async function DELETE(req: Request) {
     });
 
     if (!restaurant) {
-      return NextResponse.json({ error: "Restaurant not found" }, { status: 404 });
+      return NextResponse.json({ error: "Food supply not found" }, { status: 404 });
     }
 
     // Find all branches for this restaurant
@@ -354,7 +359,7 @@ export async function DELETE(req: Request) {
 
     return NextResponse.json({ 
       success: true, 
-      message: `Restaurant "${restaurant.name}" and all associated data deleted successfully.` 
+      message: `Food supply "${restaurant.name}" and all associated data deleted successfully.` 
     });
 
   } catch (error: any) {

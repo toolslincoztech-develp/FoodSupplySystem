@@ -54,15 +54,15 @@ export async function POST(req: Request) {
 
     if (!isSuperAdmin && user.role !== "SUPER_ADMIN") {
       if (!slug || user.restaurant?.slug?.toLowerCase() !== slug) {
-        return NextResponse.json({ error: "Invalid restaurant code" }, { status: 401 });
+        return NextResponse.json({ error: "Invalid food supply code" }, { status: 401 });
       }
 
       if (user.restaurant?.status !== "ACTIVE") {
-        return NextResponse.json({ error: "Restaurant account is suspended or inactive" }, { status: 403 });
+        return NextResponse.json({ error: "Food supply account is suspended or inactive" }, { status: 403 });
       }
 
       if (user.restaurant?.validUntil && new Date(user.restaurant.validUntil) < new Date()) {
-        return NextResponse.json({ error: "Restaurant subscription license has expired" }, { status: 403 });
+        return NextResponse.json({ error: "Food supply subscription license has expired" }, { status: 403 });
       }
     }
 

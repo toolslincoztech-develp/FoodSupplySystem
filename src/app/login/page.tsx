@@ -63,7 +63,7 @@ export default function AdminLoginPage() {
           </div>
         </div>
         <h2 className="mt-6 text-center text-3xl font-extrabold text-foreground">
-          Sign in to Restaurant ERP
+          Sign in to Food Supply ERP
         </h2>
         <p className="mt-2 text-center text-sm text-muted">
           Powered by Lincoz Tech
@@ -75,14 +75,14 @@ export default function AdminLoginPage() {
           <form className="space-y-6" onSubmit={handleLogin}>
             <div>
               <label className="block text-sm font-medium text-foreground mb-1">
-                Restaurant Subdomain / Code
+                Food Supply Subdomain / Code
               </label>
               <div className="relative">
                 <input
                   type="text"
                   required
                   className="input"
-                  placeholder="e.g. demo-burger"
+                  placeholder="e.g. fresh-foods"
                   value={slug}
                   onChange={(e) => setSlug(e.target.value.toLowerCase())}
                 />
@@ -100,7 +100,7 @@ export default function AdminLoginPage() {
                   required
                   className="input pl-10"
                   style={{ paddingLeft: "2.5rem" }}
-                  placeholder="admin@restaurant.com"
+                  placeholder="admin@foodsupply.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />

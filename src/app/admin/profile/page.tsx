@@ -210,7 +210,7 @@ export default function AdminProfilePage() {
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   className="input pl-10 w-full text-sm font-semibold"
-                  placeholder="admin@restaurant.com"
+                  placeholder="admin@foodsupply.com"
                 />
               </div>
               <p className="text-[11px] text-muted mt-1">

@@ -25,7 +25,7 @@ export interface ReceiptPrintOptions {
 export function generateReceiptHtml(order: any, options?: ReceiptPrintOptions): string {
   const logoSrc = LOGO_DATA_URI;
 
-  const restaurantName = options?.restaurantName || order.restaurant?.name || "JOSAN FOODS";
+  const restaurantName = options?.restaurantName || order.restaurant?.name || "FOOD SUPPLY";
   const receiptType = options?.receiptType || "CASH RECEIPT";
 
   // Clean order number matching sample format (e.g., "12" or "1012")
@@ -752,7 +752,7 @@ export function printKitchenTicket(win: Window | null, data: KotPrintData) {
 
 export function generateClosingReportHtml(data: any): string {
   const logoSrc = LOGO_DATA_URI;
-  const restaurantName = data.restaurant?.name || "RESTAURANT ERP";
+  const restaurantName = data.restaurant?.name || "FOOD SUPPLY ERP";
   const cashierName = data.cashier?.name || "Cashier";
   const dateStr = data.date ? new Date(data.date).toLocaleString("en-US", {
     month: "2-digit",
@@ -898,7 +898,7 @@ export function generateClosingReportHtml(data: any): string {
   </div>
 
   <div class="center" style="margin-top: 15px; font-size: 10px; color: #555;">
-    RestaurantPOS Daily Shift Closing • End of Day
+    FoodSupplyPOS Daily Shift Closing • End of Day
   </div>
 
   <script>

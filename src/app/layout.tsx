@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "RestaurantERP - Premium Restaurant Management",
-  description: "Enterprise POS, KDS, and Restaurant Management System",
+  title: "FoodSupplyERP - Premium Food Supply Management",
+  description: "Enterprise POS, KDS, and Food Supply Management System",
 };
 
 export default function RootLayout({

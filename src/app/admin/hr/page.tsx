@@ -99,7 +99,7 @@ export default function HRPage() {
           <h1 className="text-3xl font-bold tracking-tight mb-1 flex items-center gap-3">
             <Users className="text-primary" /> Staff & HR Management
           </h1>
-          <p className="text-muted">Manage your restaurant employees, waiters, and kitchen staff.</p>
+          <p className="text-muted">Manage your food supply employees, waiters, and kitchen staff.</p>
         </div>
         <button 
           onClick={() => setIsAdding(!isAdding)}
@@ -119,7 +119,7 @@ export default function HRPage() {
             </div>
             <div>
               <label className="block text-sm font-semibold mb-1">Email / Login ID</label>
-              <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="input bg-surface border-border w-full" placeholder="john@restaurant.com" />
+              <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="input bg-surface border-border w-full" placeholder="john@foodsupply.com" />
             </div>
             <div>
               <label className="block text-sm font-semibold mb-1">Password / POS PIN</label>

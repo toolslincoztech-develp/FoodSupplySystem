@@ -36,10 +36,10 @@ export async function GET() {
 
     if (user.restaurant && user.role !== "SUPER_ADMIN") {
       if (user.restaurant.status !== "ACTIVE") {
-        return NextResponse.json({ error: "Restaurant account is suspended or inactive" }, { status: 403 });
+        return NextResponse.json({ error: "Food supply account is suspended or inactive" }, { status: 403 });
       }
       if (user.restaurant.validUntil && new Date(user.restaurant.validUntil) < new Date()) {
-        return NextResponse.json({ error: "Restaurant subscription license has expired" }, { status: 403 });
+        return NextResponse.json({ error: "Food supply subscription license has expired" }, { status: 403 });
       }
     }
 

@@ -66,10 +66,10 @@ export default function POSLoginPage() {
         <h1 className="text-2xl font-bold text-foreground mb-1">POS Terminal</h1>
         
         <div className="w-full mb-6 mt-4">
-          <label className="block text-xs font-semibold text-muted uppercase tracking-wider mb-2 text-center">Restaurant Code</label>
+          <label className="block text-xs font-semibold text-muted uppercase tracking-wider mb-2 text-center">Food Supply Code</label>
           <input 
             type="text" 
-            placeholder="e.g. demo-burger" 
+            placeholder="e.g. fresh-foods" 
             className="input text-center font-bold"
             value={slug}
             onChange={(e) => setSlug(e.target.value.toLowerCase())}

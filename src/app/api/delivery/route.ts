@@ -90,7 +90,7 @@ export async function POST(req: Request) {
       });
 
       if (!validRider) {
-        return NextResponse.json({ error: "Invalid rider for this restaurant" }, { status: 400 });
+        return NextResponse.json({ error: "Invalid rider for this food supply" }, { status: 400 });
       }
 
       const updatedOrder = await prisma.order.update({

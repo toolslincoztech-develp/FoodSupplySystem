@@ -213,7 +213,7 @@ export async function GET(req: Request) {
           role: payload.role
         },
         restaurant: {
-          name: restaurant?.name || "RestroERP",
+          name: restaurant?.name || "FoodSupplyERP",
           logoUrl: restaurant?.logoUrl || null,
           phone: restaurant?.contactPhone || null
         },

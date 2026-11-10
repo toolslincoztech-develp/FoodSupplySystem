@@ -263,7 +263,7 @@ export default function ExpensesPage() {
             </h1>
           </div>
           <p className="text-xs sm:text-sm text-muted mt-1">
-            Track daily restaurant expenses. Cash expenses automatically deduct from drawer closing and finance reports.
+            Track daily food supply expenses. Cash expenses automatically deduct from drawer closing and finance reports.
           </p>
         </div>
 

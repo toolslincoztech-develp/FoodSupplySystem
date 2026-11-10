@@ -1,4 +1,4 @@
-# RestroERP - Enterprise Restaurant Management SaaS
+# FoodSupplyERP - Enterprise Food Supply Management SaaS
 
 Powered by **Lincoz Tech**.
 
