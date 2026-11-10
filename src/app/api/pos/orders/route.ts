@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma, getEffectiveBranchId } from "@/lib/db";
 import { verifyToken } from "@/lib/auth";
 import { cookies } from "next/headers";
+import { getOrSetCache, invalidateTenantCache, tenantCacheKey } from "@/lib/cache";
 
 export async function GET(req: Request) {
   try {
@@ -12,39 +13,51 @@ export async function GET(req: Request) {
     const payload = await verifyToken(token);
     if (!payload || !payload.restaurantId) return NextResponse.json({ error: "Invalid token" }, { status: 401 });
 
+    const restaurantId = payload.restaurantId;
     const branchId = await getEffectiveBranchId(payload);
 
     const { searchParams } = new URL(req.url);
     const tableId = searchParams.get("tableId");
+    const isScopedBranch = Boolean(branchId && !["OWNER", "MANAGER"].includes(payload.role));
 
     const whereClause: any = {
       status: { in: ["PENDING", "PREPARING", "READY", "SERVED"] },
-      branch: { restaurantId: payload.restaurantId }
+      branch: { restaurantId }
     };
 
-    if (branchId && !["OWNER", "MANAGER"].includes(payload.role)) {
+    if (isScopedBranch) {
       whereClause.branchId = branchId;
     }
 
     if (tableId) {
       whereClause.tableId = tableId;
-      const activeOrder = await prisma.order.findFirst({
-        where: whereClause,
-        include: { items: { include: { menuItem: true } } }
-      });
+      const activeOrder = await getOrSetCache(
+        tenantCacheKey(restaurantId, "orders", `pos-table:${isScopedBranch ? branchId : "all"}:${tableId}`),
+        8_000,
+        () =>
+          prisma.order.findFirst({
+            where: whereClause,
+            include: { items: { include: { menuItem: true } } }
+          }),
+        60_000
+      );
       return NextResponse.json({ success: true, activeOrder });
     }
 
-    const activeOrders = await prisma.order.findMany({
-      where: whereClause,
-      include: { 
-        items: { include: { menuItem: true } },
-        table: true,
-        rider: true,
-        user: { select: { name: true } }
-      },
-      orderBy: { createdAt: "desc" }
-    });
+    const activeOrders = await getOrSetCache(
+      tenantCacheKey(restaurantId, "orders", `pos-active:${isScopedBranch ? branchId : "all"}`),
+      8_000,
+      () =>
+        prisma.order.findMany({
+          where: whereClause,
+          include: {
+            items: { include: { menuItem: true } },
+            user: { select: { name: true } }
+          },
+          orderBy: { createdAt: "desc" }
+        }),
+      60_000
+    );
 
     return NextResponse.json({ success: true, activeOrders });
 
@@ -161,25 +174,35 @@ export async function POST(req: Request) {
         }
       }
 
-      // OVERWRITE items
-      await prisma.orderItem.deleteMany({ where: { orderId: existingOrderId } });
-      
-      const updatedOrder = await prisma.order.update({
-        where: { id: existingOrderId },
-        data: {
-          total,
-          tax,
-          discount: discount || 0,
-          status: hasNewAdditions ? "PENDING" : existingOrder.status,
-          items: {
-            create: finalItemsToCreate
+      // OVERWRITE items + update order in a single transaction round-trip
+      const [, updatedOrder] = await prisma.$transaction([
+        prisma.orderItem.deleteMany({ where: { orderId: existingOrderId } }),
+        prisma.order.update({
+          where: { id: existingOrderId },
+          data: {
+            total,
+            tax,
+            discount: discount || 0,
+            status: hasNewAdditions ? "PENDING" : existingOrder.status,
+            items: {
+              create: finalItemsToCreate
+            }
           }
-        }
-      });
+        })
+      ]);
+
+      invalidateTenantCache(payload.restaurantId, [
+        "pos-init",
+        "orders",
+        "dashboard",
+        "finance",
+        "closing"
+      ]);
+
       return NextResponse.json({ success: true, order: updatedOrder, hasNewAdditions });
     }
 
-    // Generate Order Number for this branch
+    // Generate Order Number for this branch (single lookup; retry only on unique conflict P2002)
     const lastOrder = await prisma.order.findFirst({
       where: { branchId },
       orderBy: { createdAt: "desc" },
@@ -194,33 +217,46 @@ export async function POST(req: Request) {
       }
     }
 
-    // Ensure order number uniqueness within branch
-    let orderNumber = `#ORD-${String(nextNum).padStart(4, "0")}`;
-    while (await prisma.order.findFirst({ where: { branchId, orderNumber } })) {
-      nextNum++;
-      orderNumber = `#ORD-${String(nextNum).padStart(4, "0")}`;
+    let order: any = null;
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const orderNumber = `#ORD-${String(nextNum + attempt).padStart(4, "0")}`;
+      try {
+        order = await prisma.order.create({
+          data: {
+            orderNumber,
+            orderType: orderType || "POS",
+            total,
+            tax,
+            discount: discount || 0,
+            branchId,
+            userId: payload.id,
+            status: "PENDING",
+            items: {
+              create: items.map((item: any) => ({
+                menuItemId: item.id || item.menuItemId,
+                quantity: item.quantity,
+                price: item.price,
+                notes: item.notes || ""
+              }))
+            }
+          }
+        });
+        break;
+      } catch (err: any) {
+        if (err?.code === "P2002" && attempt < 9) {
+          continue;
+        }
+        throw err;
+      }
     }
 
-    const order = await prisma.order.create({
-      data: {
-        orderNumber,
-        orderType: orderType || "POS",
-        total,
-        tax,
-        discount: discount || 0,
-        branchId,
-        userId: payload.id,
-        status: "PENDING",
-        items: {
-          create: items.map((item: any) => ({
-            menuItemId: item.id || item.menuItemId,
-            quantity: item.quantity,
-            price: item.price,
-            notes: item.notes || ""
-          }))
-        }
-      }
-    });
+    invalidateTenantCache(payload.restaurantId, [
+      "pos-init",
+      "orders",
+      "dashboard",
+      "finance",
+      "closing"
+    ]);
 
     return NextResponse.json({
       success: true,

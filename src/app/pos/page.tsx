@@ -69,10 +69,14 @@ export default function POSPage() {
     setTaxConfig
   } = useCartStore();
 
-  const fetchInitData = async () => {
+  const fetchInitData = async (retry = true) => {
+    let retrying = false;
     try {
-      // Single optimized request delivering menu and active orders in parallel (<300ms)
-      const res = await fetch("/api/pos/init");
+      const res = await fetch("/api/pos/init", { cache: "no-store" });
+      if (res.status === 401) {
+        window.location.href = "/pos/login";
+        return;
+      }
       if (res.ok) {
         const json = await res.json();
         const data = json.data || {};
@@ -86,9 +90,16 @@ export default function POSPage() {
         }
       }
     } catch (error) {
-      console.error("Failed to fetch POS data", error);
+      if (retry) {
+        retrying = true;
+        setTimeout(() => fetchInitData(false), 400);
+        return;
+      }
+      console.warn("Failed to fetch POS data:", error);
     } finally {
-      setLoading(false);
+      if (!retrying) {
+        setLoading(false);
+      }
     }
   };
 
@@ -113,7 +124,7 @@ export default function POSPage() {
 
   useEffect(() => {
     fetchInitData();
-    const interval = setInterval(fetchInitData, 15000); // Auto refresh every 15s
+    const interval = setInterval(() => fetchInitData(), 15000); // Auto refresh every 15s
     return () => clearInterval(interval);
   }, []);
 
@@ -299,7 +310,7 @@ export default function POSPage() {
           <div className="flex-1 overflow-y-auto p-4 lg:p-6">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-lg lg:text-xl font-bold">Active Bills & Orders</h2>
-              <button onClick={fetchInitData} className="btn border border-border bg-surface hover:bg-surface-2 text-xs font-bold gap-2">
+              <button onClick={() => fetchInitData()} className="btn border border-border bg-surface hover:bg-surface-2 text-xs font-bold gap-2">
                 <RefreshCw size={14} className={cn(loading && "animate-spin")} /> Refresh
               </button>
             </div>

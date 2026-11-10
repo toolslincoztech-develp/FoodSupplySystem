@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { verifyToken } from "@/lib/auth";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
+import { getOrSetCache, invalidateTenantCache, tenantCacheKey } from "@/lib/cache";
 
 export async function GET(req: Request) {
   try {
@@ -20,20 +21,26 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Forbidden. Admin access required." }, { status: 403 });
     }
 
-    const staff = await prisma.user.findMany({
-      where: { restaurantId: payload.restaurantId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        createdAt: true,
-        branch: {
-          select: { name: true }
-        }
-      },
-      orderBy: { createdAt: "desc" }
-    });
+    const staff = await getOrSetCache(
+      tenantCacheKey(payload.restaurantId, "staff"),
+      30_000,
+      () =>
+        prisma.user.findMany({
+          where: { restaurantId: payload.restaurantId! },
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+            createdAt: true,
+            branch: {
+              select: { name: true }
+            }
+          },
+          orderBy: { createdAt: "desc" }
+        }),
+      300_000
+    );
 
     return NextResponse.json({ success: true, data: staff });
 
@@ -85,6 +92,7 @@ export async function POST(req: Request) {
       }
     });
 
+    invalidateTenantCache(payload.restaurantId, ["staff", "dashboard"]);
     return NextResponse.json({ success: true, data: { id: newUser.id, name: newUser.name } });
 
   } catch (error) {
@@ -153,6 +161,7 @@ export async function DELETE(req: Request) {
       where: { id }
     });
 
+    invalidateTenantCache(payload.restaurantId, ["staff", "dashboard", "auth"]);
     return NextResponse.json({ success: true, message: "Staff member deleted successfully" });
 
   } catch (error) {

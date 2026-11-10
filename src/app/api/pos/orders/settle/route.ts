@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { verifyToken } from "@/lib/auth";
 import { cookies } from "next/headers";
+import { invalidateTenantCache } from "@/lib/cache";
 
 export async function POST(req: Request) {
   try {
@@ -27,24 +28,32 @@ export async function POST(req: Request) {
 
     if (!order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
 
-    // Mark Order as PAID and update discount if provided
-    const updatedOrder = await prisma.order.update({
-      where: { id: orderId },
-      data: { 
-        status: "PAID",
-        ...(discount !== undefined ? { discount, total: amountPaid || order.total } : {})
-      }
-    });
+    // Mark Order as PAID and record Payment in a single transaction round-trip
+    const [updatedOrder] = await prisma.$transaction([
+      prisma.order.update({
+        where: { id: orderId },
+        data: { 
+          status: "PAID",
+          ...(discount !== undefined ? { discount, total: amountPaid || order.total } : {})
+        }
+      }),
+      prisma.payment.create({
+        data: {
+          orderId,
+          amount: amountPaid || order.total,
+          method: paymentMethod,
+          status: "COMPLETED"
+        }
+      })
+    ]);
 
-    // Record Payment
-    await prisma.payment.create({
-      data: {
-        orderId,
-        amount: amountPaid || order.total,
-        method: paymentMethod,
-        status: "COMPLETED"
-      }
-    });
+    invalidateTenantCache(payload.restaurantId, [
+      "pos-init",
+      "orders",
+      "dashboard",
+      "finance",
+      "closing"
+    ]);
 
     return NextResponse.json({ success: true, order: updatedOrder });
   } catch (error) {

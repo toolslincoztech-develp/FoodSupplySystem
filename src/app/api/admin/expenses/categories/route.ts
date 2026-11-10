@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { verifyToken } from "@/lib/auth";
 import { cookies } from "next/headers";
+import { getOrSetCache, invalidateTenantCache, tenantCacheKey } from "@/lib/cache";
 
 const DEFAULT_CATEGORIES = [
-  { name: "Kitchen & Groceries", description: "Vegetables, meat, spices, dairy, bakery items" },
+  { name: "Supplies & Groceries", description: "Vegetables, meat, spices, dairy, bakery items" },
   { name: "Utilities & Bills", description: "Electricity, gas cylinders, water, internet" },
   { name: "Staff Meals & Tea", description: "Staff daily tea, lunch, refreshments" },
-  { name: "Packaging & Disposables", description: "Takeaway boxes, cups, bags, napkins" },
-  { name: "Fuel & Transportation", description: "Delivery bike fuel, market purchase travel" },
+  { name: "Packaging & Disposables", description: "Packaging boxes, cups, bags, napkins" },
+  { name: "Fuel & Transportation", description: "Market purchase travel, transport fuel" },
   { name: "Maintenance & Repairs", description: "Equipment repair, AC servicing, plumbing" },
   { name: "Petty Cash & Misc", description: "Daily miscellaneous petty expenses" }
 ];
@@ -24,30 +25,42 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
 
-    // Check if categories exist; if none, auto-seed defaults for this tenant
-    const existingCount = await prisma.expenseCategory.count({
-      where: { restaurantId: payload.restaurantId }
-    });
+    const restaurantId = payload.restaurantId;
+    const categories = await getOrSetCache(
+      tenantCacheKey(restaurantId, "expense-categories"),
+      60_000,
+      async () => {
+        let list = await prisma.expenseCategory.findMany({
+          where: { restaurantId },
+          include: {
+            _count: { select: { expenses: true } }
+          },
+          orderBy: { name: "asc" }
+        });
 
-    if (existingCount === 0) {
-      for (const cat of DEFAULT_CATEGORIES) {
-        await prisma.expenseCategory.create({
-          data: {
-            name: cat.name,
-            description: cat.description,
-            restaurantId: payload.restaurantId
-          }
-        }).catch(() => {});
-      }
-    }
+        if (list.length === 0) {
+          await prisma.expenseCategory.createMany({
+            data: DEFAULT_CATEGORIES.map((cat) => ({
+              name: cat.name,
+              description: cat.description,
+              restaurantId
+            })),
+            skipDuplicates: true
+          });
 
-    const categories = await prisma.expenseCategory.findMany({
-      where: { restaurantId: payload.restaurantId },
-      include: {
-        _count: { select: { expenses: true } }
+          list = await prisma.expenseCategory.findMany({
+            where: { restaurantId },
+            include: {
+              _count: { select: { expenses: true } }
+            },
+            orderBy: { name: "asc" }
+          });
+        }
+
+        return list;
       },
-      orderBy: { name: "asc" }
-    });
+      300_000
+    );
 
     return NextResponse.json({ success: true, categories });
   } catch (error) {
@@ -100,6 +113,7 @@ export async function POST(req: Request) {
       }
     });
 
+    invalidateTenantCache(payload.restaurantId, ["expense-categories"]);
     return NextResponse.json({ success: true, category });
   } catch (error) {
     console.error("Expense Category POST error:", error);
@@ -141,6 +155,7 @@ export async function DELETE(req: Request) {
       where: { id }
     });
 
+    invalidateTenantCache(payload.restaurantId, ["expense-categories", "expenses"]);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Expense Category DELETE error:", error);

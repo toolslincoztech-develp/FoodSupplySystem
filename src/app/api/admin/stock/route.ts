@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma, getEffectiveBranchId } from "@/lib/db";
 import { verifyToken } from "@/lib/auth";
 import { cookies } from "next/headers";
+import { getOrSetCache, invalidateTenantCache, tenantCacheKey } from "@/lib/cache";
 
 export async function GET(req: Request) {
   try {
@@ -19,10 +20,16 @@ export async function GET(req: Request) {
     const branchId = await getEffectiveBranchId(payload);
     if (!branchId) return NextResponse.json({ error: "No branch found" }, { status: 403 });
 
-    const stock = await prisma.inventoryItem.findMany({
-      where: { branchId },
-      orderBy: { name: "asc" }
-    });
+    const stock = await getOrSetCache(
+      tenantCacheKey(payload.restaurantId, "stock", branchId),
+      30_000,
+      () =>
+        prisma.inventoryItem.findMany({
+          where: { branchId },
+          orderBy: { name: "asc" }
+        }),
+      180_000
+    );
 
     return NextResponse.json({ success: true, data: stock });
   } catch (error) {
@@ -58,6 +65,7 @@ export async function POST(req: Request) {
           branchId
         }
       });
+      invalidateTenantCache(payload.restaurantId, ["stock"]);
       return NextResponse.json({ success: true, data: newItem });
     }
 
@@ -68,11 +76,12 @@ export async function POST(req: Request) {
           quantity: { increment: parseFloat(quantity) }
         }
       });
+      invalidateTenantCache(payload.restaurantId, ["stock"]);
       return NextResponse.json({ success: true, data: updated });
     }
 
     if (action === "ISSUE_TO_KITCHEN") {
-      // Deduct from Store stock, you could theoretically create a KitchenStock table here
+      // Deduct from Store stock
       const item = await prisma.inventoryItem.findUnique({ where: { id } });
       if (!item || item.quantity < parseFloat(issueQty)) {
         return NextResponse.json({ error: "Insufficient stock" }, { status: 400 });
@@ -82,11 +91,13 @@ export async function POST(req: Request) {
         where: { id },
         data: { quantity: { decrement: parseFloat(issueQty) } }
       });
+      invalidateTenantCache(payload.restaurantId, ["stock"]);
       return NextResponse.json({ success: true, data: updated });
     }
 
     if (action === "DELETE") {
       await prisma.inventoryItem.delete({ where: { id } });
+      invalidateTenantCache(payload.restaurantId, ["stock"]);
       return NextResponse.json({ success: true });
     }
 

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { verifyToken, signToken } from "@/lib/auth";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
+import { getOrSetCache, invalidateTenantCache, tenantCacheKey } from "@/lib/cache";
 
 export async function GET() {
   try {
@@ -13,24 +14,34 @@ export async function GET() {
     const payload = await verifyToken(token);
     if (!payload || !payload.id) return NextResponse.json({ error: "Invalid token" }, { status: 401 });
 
-    const user = await prisma.user.findUnique({
-      where: { id: payload.id },
-      include: {
-        restaurant: {
-          select: { 
-            name: true, 
-            logoUrl: true,
-            status: true,
-            validUntil: true,
-            hasHR: true,
-            hasInventory: true,
-            hasKDS: true,
-            hasDelivery: true,
-            hasTables: true
+    const cacheKey = payload.restaurantId
+      ? tenantCacheKey(payload.restaurantId, "auth", `user:${payload.id}`)
+      : `auth:user:${payload.id}`;
+
+    const user = await getOrSetCache(
+      cacheKey,
+      30_000,
+      () =>
+        prisma.user.findUnique({
+          where: { id: payload.id },
+          include: {
+            restaurant: {
+              select: {
+                name: true,
+                logoUrl: true,
+                status: true,
+                validUntil: true,
+                hasHR: true,
+                hasInventory: true,
+                hasKDS: true,
+                hasDelivery: true,
+                hasTables: true
+              }
+            }
           }
-        }
-      }
-    });
+        }),
+      300_000
+    );
 
     if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
@@ -146,6 +157,10 @@ export async function PUT(req: Request) {
         where: { id: user.restaurantId },
         data: { contactEmail: updateData.email }
       });
+    }
+
+    if (user.restaurantId) {
+      invalidateTenantCache(user.restaurantId, ["auth"]);
     }
 
     // Refresh JWT session cookie with new info

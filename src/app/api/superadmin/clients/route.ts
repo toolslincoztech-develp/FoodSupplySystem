@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { verifyToken } from "@/lib/auth";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
+import { getOrSetCache, invalidateSuperAdminCache, invalidateTenantCache } from "@/lib/cache";
 
 export async function GET(req: Request) {
   try {
@@ -16,18 +17,24 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Forbidden. SuperAdmin only." }, { status: 403 });
     }
 
-    const restaurants = await prisma.restaurant.findMany({
-      include: {
-        _count: {
-          select: { branches: true, users: true }
-        },
-        users: {
-          where: { role: "OWNER" },
-          select: { id: true, name: true, email: true, role: true }
-        }
-      },
-      orderBy: { createdAt: "desc" }
-    });
+    const restaurants = await getOrSetCache(
+      "superadmin:clients",
+      30_000,
+      () =>
+        prisma.restaurant.findMany({
+          include: {
+            _count: {
+              select: { branches: true, users: true }
+            },
+            users: {
+              where: { role: "OWNER" },
+              select: { id: true, name: true, email: true, role: true }
+            }
+          },
+          orderBy: { createdAt: "desc" }
+        }),
+      300_000
+    );
 
     return NextResponse.json({ success: true, data: restaurants });
 
@@ -104,6 +111,7 @@ export async function POST(req: Request) {
       });
     }
 
+    invalidateSuperAdminCache();
     return NextResponse.json({ success: true, data: restaurant });
 
   } catch (error) {
@@ -160,6 +168,8 @@ export async function PATCH(req: Request) {
       data
     });
 
+    invalidateSuperAdminCache();
+    invalidateTenantCache(id, ["auth", "pos-init"]);
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
     console.error("SuperAdmin PATCH Error:", error);
@@ -238,6 +248,8 @@ export async function PUT(req: Request) {
         data: { contactEmail: trimmedEmail }
       });
 
+      invalidateSuperAdminCache();
+      invalidateTenantCache(restaurantId, ["auth", "staff"]);
       return NextResponse.json({ success: true, message: "Admin created successfully", data: newUser });
     }
 
@@ -260,18 +272,20 @@ export async function PUT(req: Request) {
       updateData.password = await bcrypt.hash(String(password).trim(), 10);
     }
 
-    const updatedUser = await prisma.user.update({
-      where: { id: targetUser.id },
-      data: updateData,
-      select: { id: true, name: true, email: true, role: true }
-    });
+    const [updatedUser] = await prisma.$transaction([
+      prisma.user.update({
+        where: { id: targetUser.id },
+        data: updateData,
+        select: { id: true, name: true, email: true, role: true }
+      }),
+      prisma.restaurant.update({
+        where: { id: restaurantId },
+        data: { contactEmail: trimmedEmail }
+      })
+    ]);
 
-    // Also sync the restaurant's contactEmail
-    await prisma.restaurant.update({
-      where: { id: restaurantId },
-      data: { contactEmail: trimmedEmail }
-    });
-
+    invalidateSuperAdminCache();
+    invalidateTenantCache(restaurantId, ["auth", "staff"]);
     return NextResponse.json({ success: true, message: "Admin details updated successfully", data: updatedUser });
 
   } catch (error) {
@@ -356,6 +370,9 @@ export async function DELETE(req: Request) {
         where: { id }
       })
     ]);
+
+    invalidateSuperAdminCache();
+    invalidateTenantCache(id);
 
     return NextResponse.json({ 
       success: true, 

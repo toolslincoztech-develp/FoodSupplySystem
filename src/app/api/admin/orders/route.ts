@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { prisma, getEffectiveBranchId } from "@/lib/db";
+import { prisma } from "@/lib/db";
 import { verifyToken } from "@/lib/auth";
 import { cookies } from "next/headers";
+import { getOrSetCache, tenantCacheKey } from "@/lib/cache";
 
 export async function GET(req: Request) {
   try {
@@ -27,105 +28,109 @@ export async function GET(req: Request) {
     const typeFilter = searchParams.get("type") || "ALL";
     const timeframe = searchParams.get("timeframe") || "all";
 
+    const restaurantId = payload.restaurantId;
     const isOwner = ["OWNER", "SUPER_ADMIN", "MANAGER"].includes(payload.role);
-    const branchId = await getEffectiveBranchId(payload);
+    const branchKey = payload.branchId && !isOwner ? payload.branchId : "all";
 
-    const baseWhere: any = (payload.branchId && !isOwner)
-      ? { branchId: payload.branchId }
-      : { branch: { restaurantId: payload.restaurantId } };
+    const cacheKey = tenantCacheKey(
+      restaurantId,
+      "orders",
+      `admin:${branchKey}:${statusFilter}:${typeFilter}:${timeframe}:${search.trim().toLowerCase()}`
+    );
 
-    // Date filtering
-    const now = new Date();
-    let startDate: Date | null = null;
+    const data = await getOrSetCache(
+      cacheKey,
+      10_000,
+      async () => {
+        const baseWhere: any = (payload.branchId && !isOwner)
+          ? { branchId: payload.branchId }
+          : { branch: { restaurantId } };
 
-    if (timeframe === "today") {
-      startDate = new Date();
-      startDate.setHours(0, 0, 0, 0);
-    } else if (timeframe === "week") {
-      startDate = new Date();
-      startDate.setDate(now.getDate() - 7);
-      startDate.setHours(0, 0, 0, 0);
-    } else if (timeframe === "month") {
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-    }
+        const now = new Date();
+        let startDate: Date | null = null;
 
-    const where: any = {
-      ...baseWhere
-    };
+        if (timeframe === "today") {
+          startDate = new Date();
+          startDate.setHours(0, 0, 0, 0);
+        } else if (timeframe === "week") {
+          startDate = new Date();
+          startDate.setDate(now.getDate() - 7);
+          startDate.setHours(0, 0, 0, 0);
+        } else if (timeframe === "month") {
+          startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        }
 
-    if (startDate) {
-      where.createdAt = { gte: startDate, lte: now };
-    }
+        const where: any = { ...baseWhere };
 
-    // Status filtering
-    if (statusFilter === "PAID") {
-      where.status = { in: ["PAID", "COMPLETED"] };
-    } else if (statusFilter === "ACTIVE") {
-      where.status = { in: ["PENDING", "PREPARING", "READY", "SERVED", "OUT_FOR_DELIVERY"] };
-    } else if (statusFilter === "CANCELLED") {
-      where.status = "CANCELLED";
-    }
+        if (startDate) {
+          where.createdAt = { gte: startDate, lte: now };
+        }
 
-    // Order Type filtering
-    if (typeFilter !== "ALL") {
-      where.orderType = typeFilter;
-    }
+        if (statusFilter === "PAID") {
+          where.status = { in: ["PAID", "COMPLETED"] };
+        } else if (statusFilter === "ACTIVE") {
+          where.status = { in: ["PENDING", "PREPARING", "READY", "SERVED", "OUT_FOR_DELIVERY"] };
+        } else if (statusFilter === "CANCELLED") {
+          where.status = "CANCELLED";
+        }
 
-    // Text search by order number
-    if (search.trim()) {
-      where.orderNumber = {
-        contains: search.trim(),
-        mode: "insensitive"
-      };
-    }
+        if (typeFilter !== "ALL") {
+          where.orderType = typeFilter;
+        }
 
-    // Fetch orders with full relation details (limit to 100 for fast page response)
-    const orders = await prisma.order.findMany({
-      where,
-      include: {
-        table: true,
-        user: { select: { name: true, email: true } },
-        rider: { select: { name: true } },
-        payment: true,
-        items: {
-          include: {
-            menuItem: true
+        if (search.trim()) {
+          where.orderNumber = {
+            contains: search.trim(),
+            mode: "insensitive"
+          };
+        }
+
+        const [orders, allOrdersForStats] = await Promise.all([
+          prisma.order.findMany({
+            where,
+            include: {
+              user: { select: { name: true, email: true } },
+              payment: true,
+              items: {
+                include: {
+                  menuItem: true
+                }
+              }
+            },
+            orderBy: { createdAt: "desc" },
+            take: 100
+          }),
+          prisma.order.findMany({
+            where: baseWhere,
+            select: {
+              status: true,
+              total: true,
+              payment: { select: { amount: true } }
+            }
+          })
+        ]);
+
+        const totalOrders = allOrdersForStats.length;
+        const paidOrdersCount = allOrdersForStats.filter(o => ["PAID", "COMPLETED", "SERVED"].includes(o.status)).length;
+        const activeOrdersCount = allOrdersForStats.filter(o => ["PENDING", "PREPARING", "READY", "OUT_FOR_DELIVERY"].includes(o.status)).length;
+        const totalSales = allOrdersForStats
+          .filter(o => ["PAID", "COMPLETED", "SERVED"].includes(o.status))
+          .reduce((sum, o) => sum + (o.payment?.amount ?? o.total), 0);
+
+        return {
+          orders,
+          summary: {
+            totalOrders,
+            paidOrdersCount,
+            activeOrdersCount,
+            totalSales
           }
-        }
+        };
       },
-      orderBy: { createdAt: "desc" },
-      take: 100
-    });
+      120_000
+    );
 
-    // Compute summary metrics with lean projection (only status, total, payment amount)
-    const allOrdersForStats = await prisma.order.findMany({
-      where: baseWhere,
-      select: {
-        status: true,
-        total: true,
-        payment: { select: { amount: true } }
-      }
-    });
-
-    const totalOrders = allOrdersForStats.length;
-    const paidOrdersCount = allOrdersForStats.filter(o => ["PAID", "COMPLETED", "SERVED"].includes(o.status)).length;
-    const activeOrdersCount = allOrdersForStats.filter(o => ["PENDING", "PREPARING", "READY", "OUT_FOR_DELIVERY"].includes(o.status)).length;
-    const totalSales = allOrdersForStats
-      .filter(o => ["PAID", "COMPLETED", "SERVED"].includes(o.status))
-      .reduce((sum, o) => sum + (o.payment?.amount ?? o.total), 0);
-
-    return NextResponse.json({
-      success: true,
-      data: {
-        orders,
-        summary: {
-          totalOrders,
-          paidOrdersCount,
-          activeOrdersCount,
-          totalSales
-        }
-      }
-    });
+    return NextResponse.json({ success: true, data });
 
   } catch (error) {
     console.error("Admin Orders API Error:", error);

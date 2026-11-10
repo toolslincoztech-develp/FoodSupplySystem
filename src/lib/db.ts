@@ -34,6 +34,13 @@ export const prisma =
 // Always preserve and reuse connection across warm serverless container invocations
 globalForPrisma.prisma = prisma;
 
+// Pre-warm the database pool connection in the background so first request avoids cold TLS/PgBouncer handshake
+const globalForWarmup = globalThis as unknown as { __prismaWarmupStarted?: boolean };
+if (!globalForWarmup.__prismaWarmupStarted && typeof process !== "undefined" && process.env.DATABASE_URL) {
+  globalForWarmup.__prismaWarmupStarted = true;
+  void prisma.$connect().catch(() => {});
+}
+
 // In-memory branch cache to eliminate redundant DB lookups on every request
 const branchCache = new Map<string, { id: string; expires: number }>();
 

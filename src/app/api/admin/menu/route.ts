@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { verifyToken } from "@/lib/auth";
 import { cookies } from "next/headers";
+import { getOrSetCache, invalidateTenantCache, tenantCacheKey } from "@/lib/cache";
 
 type NormalizedSizesResult =
   | { kind: "none" }
@@ -62,13 +63,19 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
     }
 
-    const categories = await prisma.category.findMany({
-      where: { restaurantId: payload.restaurantId },
-      include: {
-        items: true
-      },
-      orderBy: { sortOrder: "asc" }
-    });
+    const categories = await getOrSetCache(
+      tenantCacheKey(payload.restaurantId, "menu"),
+      60_000,
+      () =>
+        prisma.category.findMany({
+          where: { restaurantId: payload.restaurantId! },
+          include: {
+            items: true
+          },
+          orderBy: { sortOrder: "asc" }
+        }),
+      300_000
+    );
 
     return NextResponse.json({ success: true, data: categories });
 
@@ -107,6 +114,7 @@ export async function POST(req: Request) {
           sortOrder: 0
         }
       });
+      invalidateTenantCache(payload.restaurantId, ["menu", "pos-init"]);
       return NextResponse.json({ success: true, data: newCategory });
     } 
     
@@ -136,6 +144,7 @@ export async function POST(req: Request) {
           isAvailable: true
         }
       });
+      invalidateTenantCache(payload.restaurantId, ["menu", "pos-init"]);
       return NextResponse.json({ success: true, data: newItem });
     }
 
@@ -180,6 +189,7 @@ export async function POST(req: Request) {
           ...(isAvailable !== undefined ? { isAvailable: Boolean(isAvailable) } : {})
         }
       });
+      invalidateTenantCache(payload.restaurantId, ["menu", "pos-init"]);
       return NextResponse.json({ success: true, data: updated });
     }
 
@@ -196,6 +206,7 @@ export async function POST(req: Request) {
       await prisma.menuItem.delete({
         where: { id: existingItem.id }
       });
+      invalidateTenantCache(payload.restaurantId, ["menu", "pos-init"]);
       return NextResponse.json({ success: true });
     }
 
@@ -213,6 +224,7 @@ export async function POST(req: Request) {
         where: { id: existingItem.id },
         data: { isAvailable: Boolean(isAvailable) }
       });
+      invalidateTenantCache(payload.restaurantId, ["menu", "pos-init"]);
       return NextResponse.json({ success: true, data: updated });
     }
 

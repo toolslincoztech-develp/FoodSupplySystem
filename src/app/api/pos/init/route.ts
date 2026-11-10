@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma, getEffectiveBranchId } from "@/lib/db";
 import { verifyToken } from "@/lib/auth";
 import { cookies } from "next/headers";
+import { getOrSetCache, tenantCacheKey } from "@/lib/cache";
 
 export async function GET(req: Request) {
   try {
@@ -17,57 +18,57 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Invalid token or tenant missing" }, { status: 401 });
     }
 
-    // In a multi-branch setup, Waiters are assigned to a branchId, or Owners default to restaurant's branch
+    const restaurantId = payload.restaurantId;
     const branchId = await getEffectiveBranchId(payload);
 
     if (!branchId) {
       return NextResponse.json({ error: "User is not assigned to a branch and no branch found" }, { status: 403 });
     }
 
-    // Execute queries in parallel for maximum speed (<250ms)
-    const [categories, menuItems, activeOrders, restaurant] = await Promise.all([
-      // 1. Categories for the tenant
-      prisma.category.findMany({
-        where: { restaurantId: payload.restaurantId },
-        orderBy: { sortOrder: "asc" }
-      }),
-      // 2. Menu Items for the tenant
-      prisma.menuItem.findMany({
-        where: { restaurantId: payload.restaurantId },
-        orderBy: { name: "asc" }
-      }),
-      // 3. Active orders for drawer list
-      prisma.order.findMany({
-        where: {
-          branchId,
-          status: { in: ["PENDING", "PREPARING", "READY", "SERVED"] }
-        },
-        include: {
-          items: { include: { menuItem: true } },
-          user: { select: { name: true } }
-        },
-        orderBy: { createdAt: "desc" }
-      }),
-      // 4. Tax Configuration
-      prisma.$queryRaw<Array<{ hasTax: boolean; taxRate: number }>>`
-        SELECT "hasTax", "taxRate" FROM "Restaurant" WHERE id = ${payload.restaurantId} LIMIT 1
-      `
-    ]);
+    const data = await getOrSetCache(
+      tenantCacheKey(restaurantId, "pos-init", branchId),
+      10_000,
+      async () => {
+        const [categories, menuItems, activeOrders, restaurant] = await Promise.all([
+          prisma.category.findMany({
+            where: { restaurantId },
+            orderBy: { sortOrder: "asc" }
+          }),
+          prisma.menuItem.findMany({
+            where: { restaurantId },
+            orderBy: { name: "asc" }
+          }),
+          prisma.order.findMany({
+            where: {
+              branchId,
+              status: { in: ["PENDING", "PREPARING", "READY", "SERVED"] }
+            },
+            include: {
+              items: { include: { menuItem: true } },
+              user: { select: { name: true } }
+            },
+            orderBy: { createdAt: "desc" }
+          }),
+          prisma.restaurant.findUnique({
+            where: { id: restaurantId },
+            select: { hasTax: true, taxRate: true }
+          })
+        ]);
 
-    const taxInfo = Array.isArray(restaurant) && restaurant.length > 0 ? restaurant[0] : null;
+        return {
+          categories,
+          menuItems,
+          activeOrders,
+          taxConfig: {
+            hasTax: Boolean(restaurant?.hasTax),
+            taxRate: Number(restaurant?.taxRate || 0)
+          }
+        };
+      },
+      120_000
+    );
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        categories,
-        menuItems,
-        activeOrders,
-        taxConfig: {
-          hasTax: Boolean(taxInfo?.hasTax),
-          taxRate: Number(taxInfo?.taxRate || 0)
-        }
-      }
-    });
+    return NextResponse.json({ success: true, data });
 
   } catch (error) {
     console.error("POS Init Error:", error);
