@@ -6,15 +6,12 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   UtensilsCrossed,
-  ChefHat,
-  Bike,
   Users,
   ClipboardList,
   Package,
   Wallet,
   LogOut,
   Receipt,
-  Grid2X2,
   UserCog
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -22,9 +19,6 @@ import { cn } from "@/lib/utils";
 const NAV_ITEMS = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/pos", label: "POS Terminal", icon: UtensilsCrossed },
-  { href: "/admin/tables", label: "Tables & Floors", icon: Grid2X2 },
-  { href: "/kds", label: "Kitchen (KDS)", icon: ChefHat },
-  { href: "/delivery", label: "Delivery", icon: Bike },
   { href: "/admin/billing", label: "Billing / Cashier", icon: Receipt },
   { href: "/admin/orders", label: "Sales & Orders", icon: ClipboardList },
   { href: "/admin/inventory", label: "Menu Management", icon: Package },
@@ -39,8 +33,8 @@ export function Sidebar() {
   const pathname = usePathname();
   const [profile, setProfile] = useState<any>(null);
 
-  // Hide sidebar on POS, KDS, Delivery, and all login pages
-  const isFullScreenApp = ["/pos", "/kds", "/delivery", "/login", "/superadmin"].some(path => pathname?.startsWith(path));
+  // Hide sidebar on POS and all login/superadmin pages
+  const isFullScreenApp = ["/pos", "/login", "/superadmin"].some(path => pathname?.startsWith(path));
 
   useEffect(() => {
     if (isFullScreenApp || pathname === "/") return;
@@ -101,11 +95,8 @@ export function Sidebar() {
 
           // 1. Feature Toggles Check (SuperAdmin overrides)
           if (item.href === "/admin/hr" && restaurant?.hasHR === false) return false;
-          if (item.href === "/kds" && restaurant?.hasKDS === false) return false;
           if (item.href === "/admin/inventory" && restaurant?.hasInventory === false) return false;
           if (item.href === "/admin/stock" && restaurant?.hasInventory === false) return false;
-          if (item.href === "/delivery" && restaurant?.hasDelivery === false) return false;
-          if (item.href === "/admin/tables" && restaurant?.hasTables === false) return false;
 
           // 2. Role-Based Permissions
           if (role === "OWNER" || role === "SUPER_ADMIN") return true;

@@ -13,17 +13,8 @@ export interface CartItem {
 interface CartState {
   items: CartItem[];
   originalItems: CartItem[];
-  selectedTable: string | null;
-  selectedTableName: string | null;
   existingOrderId: string | null;
-  orderType: "DINE_IN" | "TAKEAWAY" | "DELIVERY";
   paymentMethod: "CASH" | "CARD" | null;
-  customerName?: string;
-  customerPhone?: string;
-  customerAddress?: string;
-  riderId?: string | null;
-  riderName?: string | null;
-  deliveryFee: number;
   discount: number;
   discountType: "FLAT" | "PERCENTAGE";
   discountValue: number;
@@ -35,14 +26,9 @@ interface CartState {
   removeItem: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
   updateNotes: (id: string, notes: string) => void;
-  setTable: (tableId: string | null, tableName: string | null) => void;
   setExistingOrderId: (orderId: string | null) => void;
   setOriginalItems: (items: CartItem[]) => void;
-  setOrderType: (type: "DINE_IN" | "TAKEAWAY" | "DELIVERY") => void;
   setPaymentMethod: (method: "CASH" | "CARD" | null) => void;
-  setCustomerDetails: (name: string, phone: string, address: string, riderId?: string | null, riderName?: string | null) => void;
-  setRider: (riderId: string | null, riderName?: string | null) => void;
-  setDeliveryFee: (fee: number) => void;
   setDiscount: (value: number, type?: "FLAT" | "PERCENTAGE") => void;
   setTaxConfig: (hasTax: boolean, taxRate: number) => void;
   clearCart: () => void;
@@ -60,15 +46,8 @@ interface CartState {
 export const useCartStore = create<CartState>((set, get) => ({
   items: [],
   originalItems: [],
-  selectedTable: null,
-  selectedTableName: null,
   existingOrderId: null,
-  orderType: "DINE_IN",
   paymentMethod: null,
-  customerName: "",
-  customerPhone: "",
-  customerAddress: "",
-  deliveryFee: 0,
   discount: 0,
   discountType: "FLAT",
   discountValue: 0,
@@ -118,32 +97,11 @@ export const useCartStore = create<CartState>((set, get) => ({
     });
   },
 
-  setTable: (tableId, tableName) =>
-    set({ selectedTable: tableId, selectedTableName: tableName }),
-
   setExistingOrderId: (orderId) => set({ existingOrderId: orderId }),
 
   setOriginalItems: (items) => set({ originalItems: items.map((i) => ({ ...i })) }),
 
-  setOrderType: (orderType) => set({ orderType }),
-
   setPaymentMethod: (method) => set({ paymentMethod: method }),
-
-  setCustomerDetails: (name, phone, address, riderId, riderName) => 
-    set((state) => ({ 
-      customerName: name, 
-      customerPhone: phone, 
-      customerAddress: address,
-      riderId: riderId !== undefined ? riderId : state.riderId,
-      riderName: riderName !== undefined ? riderName : state.riderName
-    })),
-
-  setRider: (riderId, riderName) => set({ riderId, riderName }),
-
-  setDeliveryFee: (fee) => {
-    const safeFee = Math.max(0, isNaN(fee) ? 0 : fee);
-    set({ deliveryFee: safeFee });
-  },
 
   setTaxConfig: (hasTax, taxRate) => set({ hasTax, taxRate }),
 
@@ -166,7 +124,6 @@ export const useCartStore = create<CartState>((set, get) => ({
     set({
       items: [],
       originalItems: [],
-      deliveryFee: 0,
       discount: 0,
       discountValue: 0,
     }),
@@ -175,20 +132,11 @@ export const useCartStore = create<CartState>((set, get) => ({
     set({
       items: [],
       originalItems: [],
-      selectedTable: null,
-      selectedTableName: null,
       existingOrderId: null,
       paymentMethod: null,
-      customerName: "",
-      customerPhone: "",
-      customerAddress: "",
-      riderId: null,
-      riderName: null,
-      deliveryFee: 0,
       discount: 0,
       discountValue: 0,
       discountType: "FLAT",
-      orderType: "DINE_IN",
     }),
 
   getNewlyAddedItems: () => {
@@ -239,9 +187,8 @@ export const useCartStore = create<CartState>((set, get) => ({
   getTotal: () => {
     const subtotal = get().getSubtotal();
     const discount = get().getDiscountAmount();
-    const deliveryFee = get().deliveryFee || 0;
     const tax = get().getTax();
-    return Math.round(Math.max(0, subtotal - discount + deliveryFee + tax) * 100) / 100;
+    return Math.round(Math.max(0, subtotal - discount + tax) * 100) / 100;
   },
 
   getItemCount: () => get().items.reduce((t, i) => t + i.quantity, 0),

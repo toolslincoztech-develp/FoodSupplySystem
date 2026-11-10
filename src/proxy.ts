@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 import { verifyToken } from "@/lib/auth";
 
 // Public routes that don't require authentication
-const publicRoutes = ["/login", "/pos/login", "/kds/login", "/superadmin/login", "/api/auth/admin", "/api/auth/pos", "/api/setup"];
+const publicRoutes = ["/login", "/pos/login", "/superadmin/login", "/api/auth/admin", "/api/auth/pos", "/api/setup"];
 
 export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -41,31 +41,9 @@ export default async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Riders ONLY have access to the Delivery terminal (/delivery) and nothing else
-  if (role === "RIDER") {
-    if (!pathname.startsWith("/delivery")) {
-      return NextResponse.redirect(new URL("/delivery", request.url));
-    }
-    return NextResponse.next();
-  }
-
-  // POS route protection (Only Waiters, Cashiers, Managers, Owners)
+  // POS route protection (Only Staff, Cashiers, Managers, Owners)
   if (pathname.startsWith("/pos")) {
     if (!["WAITER", "CASHIER", "MANAGER", "OWNER"].includes(role)) {
-      return NextResponse.redirect(new URL("/login", request.url));
-    }
-  }
-
-  // Delivery route protection (Only Riders, Managers, Owners)
-  if (pathname.startsWith("/delivery")) {
-    if (!["RIDER", "MANAGER", "OWNER", "SUPER_ADMIN"].includes(role)) {
-      return NextResponse.redirect(new URL("/pos", request.url));
-    }
-  }
-
-  // KDS route protection (Only Kitchen, Managers, Owners)
-  if (pathname.startsWith("/kds")) {
-    if (!["KITCHEN_STAFF", "MANAGER", "OWNER"].includes(role)) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
   }
@@ -93,7 +71,7 @@ function redirectToLogin(request: NextRequest) {
   if (pathname.startsWith("/superadmin")) {
     return NextResponse.redirect(new URL("/superadmin/login", request.url));
   }
-  if (pathname.startsWith("/pos") || pathname.startsWith("/kds") || pathname.startsWith("/delivery")) {
+  if (pathname.startsWith("/pos")) {
     return NextResponse.redirect(new URL("/pos/login", request.url));
   }
   

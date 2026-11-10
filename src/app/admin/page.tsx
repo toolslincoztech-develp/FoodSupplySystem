@@ -102,7 +102,7 @@ export default function AdminDashboard() {
         <StatCard 
           title="Active Orders" 
           value={activeOrdersCount?.toString() || "0"}
-          trend="Cooking"
+          trend="Active"
           isPositive={true}
           icon={Utensils}
           colorClass="text-info bg-info-muted"
@@ -182,7 +182,7 @@ export default function AdminDashboard() {
                 <span className="font-bold text-primary">{staffCount || 0}</span>
               </div>
               <div className="flex items-center justify-between border-b border-border pb-2">
-                <span className="font-semibold text-sm">Active Tables</span>
+                <span className="font-semibold text-sm">Active Orders</span>
                 <span className="font-bold text-warning">{activeOrdersCount || 0}</span>
               </div>
             </div>
@@ -199,7 +199,7 @@ export default function AdminDashboard() {
                 <div key={order.id} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0 border-dashed">
                   <div>
                     <p className="font-bold text-sm">{order.orderNumber}</p>
-                    <p className="text-xs text-muted">By {order.user?.name || "Server"} {order.table ? `• Table ${order.table.name}` : ""}</p>
+                    <p className="text-xs text-muted">By {order.user?.name || "Staff"}</p>
                   </div>
                   <div className="text-right">
                     <p className="font-semibold text-sm">{formatCurrency(order.total)}</p>

@@ -56,11 +56,6 @@ export function generateReceiptHtml(order: any, options?: ReceiptPrintOptions): 
       hour12: true
     });
 
-  // Order type
-  const orderTypeRaw = order.orderType ? String(order.orderType).replace("_", " ").toUpperCase() : "TAKEAWAY";
-  const formattedTableName = order.table?.name ? (order.table.floor ? `${order.table.floor} - ${order.table.name}` : order.table.name) : "";
-  const typeDisplay = orderTypeRaw === "DINE IN" && formattedTableName ? `DINE IN (${formattedTableName})` : orderTypeRaw;
-
   // Payment status / method
   const paymentDisplay = options?.paymentStatus || (order.payment?.status === "PAID" ? "PAID" : order.payment?.method || (order.status === "COMPLETED" ? "PAID" : "PAID"));
 
@@ -179,20 +174,15 @@ export function generateReceiptHtml(order: any, options?: ReceiptPrintOptions): 
     }
   }
 
-  // Fallback defaults matching the sample slip ("Customer MR", "Phone: 0")
+  // Fallback defaults
   if (!customerName) {
-    customerName = orderTypeRaw === "TAKEAWAY" ? "MR" : orderTypeRaw === "DINE IN" ? (order.table?.name ? `Table ${order.table.name}` : "Guest") : "Customer";
+    customerName = "Walk-in";
   }
   if (!customerPhone) {
     customerPhone = "0";
   }
 
-  const customerHeader =
-    orderTypeRaw === "DELIVERY"
-      ? "DELIVERY CUSTOMER:"
-      : orderTypeRaw === "DINE IN"
-        ? (formattedTableName ? `DINE-IN (${formattedTableName.toUpperCase()}):` : "DINE-IN CUSTOMER:")
-        : "TAKEAWAY CUSTOMER:";
+  const customerHeader = "CUSTOMER DETAILS:";
 
   const customerAddressHtml = customerAddress
     ? `<div>Address: ${customerAddress}</div>`
@@ -382,7 +372,6 @@ export function generateReceiptHtml(order: any, options?: ReceiptPrintOptions): 
       <div class="center header-meta">
         <div>Date: ${formattedDate}</div>
         <div>Order #: ${orderNumDisplay}</div>
-        <div>Type: ${typeDisplay}</div>
         <div>Payment: ${paymentDisplay}</div>
         <div>Cashier: ${cashierDisplay}</div>
       </div>
@@ -497,259 +486,6 @@ export function printReceipt(order: any, options?: ReceiptPrintOptions) {
   }
 }
 
-export interface KotPrintData {
-  orderNum: string;
-  type: string;
-  tableName?: string | null;
-  items: { name: string; quantity: number; notes?: string }[];
-  deliveryInfo?: { name?: string; phone?: string; address?: string; riderName?: string; deliveryFee?: number };
-  createdAt?: Date | string;
-  isAddition?: boolean;
-}
-
-export function generateKotHtml(data: KotPrintData): string {
-  // Format table / type text matching: "Dine In - Table: table 9" or "Takeaway" or "Delivery"
-  let subHeader = "";
-  const typeRaw = data.type ? String(data.type).toUpperCase() : "DINE_IN";
-  if (typeRaw === "DINE_IN" || typeRaw === "DINE IN") {
-    subHeader = data.tableName ? `Dine In - Table: ${data.tableName}` : "Dine In";
-  } else if (typeRaw === "DELIVERY") {
-    subHeader = "Delivery";
-  } else {
-    subHeader = "Takeaway";
-  }
-
-  // Clean order number matching sample format (e.g., "50")
-  let orderNumClean = "1";
-  if (data.orderNum) {
-    const str = String(data.orderNum);
-    const match = str.match(/\d+$/);
-    orderNumClean = match ? String(parseInt(match[0], 10)) : str.replace(/^#/, "");
-  }
-
-  // Format date matching: "10/13/2026, 12:51:44 AM"
-  const dateObj = data.createdAt ? new Date(data.createdAt) : new Date();
-  const formattedDate =
-    dateObj.toLocaleDateString("en-US", {
-      month: "2-digit",
-      day: "2-digit",
-      year: "numeric"
-    }) +
-    ", " +
-    dateObj.toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: true
-    });
-
-  // Items formatting: "1 x Chicken Tikka (M)" with "* M" below
-  const itemsHtml = (data.items || []).map(item => {
-    const cleanNotes = item.notes
-      ? item.notes.replace(/\s*\|\s*\[NEW ADDITION\]|\[NEW ADDITION\]/g, "").trim()
-      : "";
-    const notesHtml = cleanNotes && !cleanNotes.includes("Delivery To:") && !cleanNotes.includes("Takeaway For:")
-      ? `<div class="item-notes">* ${cleanNotes}</div>`
-      : "";
-    return `
-      <div class="item-row">
-        <div class="item-main">${item.quantity} x ${item.name}</div>
-        ${notesHtml}
-      </div>
-    `;
-  }).join("");
-
-  let deliveryHtml = "";
-  if (data.deliveryInfo?.name) {
-    if (typeRaw === "DELIVERY") {
-      deliveryHtml = `
-        <div class="delivery-info">
-          <div>* To: ${escapeHtml(data.deliveryInfo.name)} (${escapeHtml(data.deliveryInfo.phone || "No Phone")})</div>
-          <div>* Addr: ${escapeHtml(data.deliveryInfo.address || "N/A")}</div>
-          ${data.deliveryInfo.riderName ? `<div>* Rider: ${escapeHtml(data.deliveryInfo.riderName)}</div>` : ""}
-          ${data.deliveryInfo.deliveryFee ? `<div>* Delivery Charges: Rs ${data.deliveryInfo.deliveryFee}</div>` : ""}
-        </div>
-      `;
-    } else {
-      deliveryHtml = `
-        <div class="delivery-info">
-          <div>* Customer: ${escapeHtml(data.deliveryInfo.name)} ${data.deliveryInfo.phone ? `(${escapeHtml(data.deliveryInfo.phone)})` : ""}</div>
-        </div>
-      `;
-    }
-  }
-
-  return `<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <title></title>
-    <style>
-      @page {
-        size: 80mm 297mm;
-        margin: 0;
-      }
-      * {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-      }
-      html, body {
-        width: 80mm;
-        margin: 0;
-        padding: 0;
-        background: #fff;
-        color: #000;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-      }
-      .kot-container {
-        width: 80mm;
-        max-width: 80mm;
-        margin: 0 auto;
-        padding: 6px 6mm 10px 6mm;
-        box-sizing: border-box;
-      }
-      .center {
-        text-align: center;
-      }
-      .bold {
-        font-weight: 700;
-      }
-      .kot-title {
-        font-size: 19px;
-        font-weight: 900;
-        letter-spacing: 0.5px;
-        text-transform: uppercase;
-        margin-bottom: 2px;
-      }
-      .kot-sub {
-        font-size: 13.5px;
-        font-weight: 500;
-        margin-bottom: 4px;
-      }
-      .dashed-line {
-        border-bottom: 1px dashed #000;
-        margin: 6px 0;
-        width: 100%;
-      }
-      .meta-section {
-        font-size: 13px;
-        font-weight: 700;
-        line-height: 1.45;
-        margin: 4px 0;
-      }
-      .items-list {
-        margin: 6px 0;
-      }
-      .item-row {
-        margin-bottom: 6px;
-      }
-      .item-main {
-        font-size: 14.5px;
-        font-weight: 800;
-        color: #000;
-      }
-      .item-notes {
-        font-size: 12.5px;
-        font-weight: 600;
-        margin-left: 10px;
-        margin-top: 1px;
-        color: #222;
-      }
-      .delivery-info {
-        font-size: 12px;
-        font-weight: 600;
-        margin-top: 6px;
-        padding-top: 4px;
-        border-top: 1px dotted #555;
-      }
-      @media print {
-        @page {
-          size: 80mm 297mm;
-          margin: 0;
-        }
-        html, body {
-          width: 80mm !important;
-          margin: 0 !important;
-          padding: 0 !important;
-          background: #fff !important;
-        }
-        .kot-container {
-          width: 80mm !important;
-          max-width: 80mm !important;
-          margin: 0 auto !important;
-          padding: 4px 6mm 8px 6mm !important;
-          box-sizing: border-box !important;
-        }
-      }
-    </style>
-  </head>
-  <body>
-    <div class="kot-container">
-      <div class="center kot-title">${data.isAddition ? "KOT: NEW ADDITIONS" : "KITCHEN ORDER"}</div>
-      <div class="center kot-sub">${data.isAddition ? `${subHeader} (RUNNING ORDER ADDITION)` : subHeader}</div>
-      ${data.isAddition ? '<div class="center" style="font-size: 11.5px; font-weight: 800; color: #000; margin: 3px 0; padding: 2px 0; border: 1px dashed #000;">*** PREPARE ONLY NEW ITEMS LISTED BELOW ***</div>' : ''}
-      <div class="dashed-line"></div>
-      <div class="meta-section">
-        <div>Order #: ${orderNumClean} ${data.isAddition ? "(NEW ITEMS)" : ""}</div>
-        <div>Date: ${formattedDate}</div>
-      </div>
-      <div class="dashed-line"></div>
-      <div class="items-list">
-        ${itemsHtml}
-        ${deliveryHtml}
-      </div>
-      <div class="dashed-line"></div>
-    </div>
-    <script>
-      window.hasPrinted = false;
-      function doPrint() {
-        if (window.hasPrinted) return;
-        window.hasPrinted = true;
-        setTimeout(function() {
-          window.focus();
-          window.print();
-          window.close();
-        }, 150);
-      }
-      if (document.readyState === 'complete') {
-        setTimeout(doPrint, 200);
-      } else {
-        window.addEventListener('load', function() { setTimeout(doPrint, 200); });
-        setTimeout(doPrint, 500);
-      }
-    </script>
-  </body>
-</html>`;
-}
-
-export function printKitchenTicket(win: Window | null, data: KotPrintData) {
-  try {
-    const printWindow = win || window.open("", "_blank", "width=380,height=600");
-    if (!printWindow) return;
-
-    const html = generateKotHtml(data);
-    printWindow.document.open();
-    printWindow.document.write(html);
-    printWindow.document.close();
-
-    setTimeout(() => {
-      try {
-        if (printWindow && !printWindow.closed && !(printWindow as any).hasPrinted) {
-          (printWindow as any).hasPrinted = true;
-          printWindow.focus();
-          printWindow.print();
-          printWindow.close();
-        }
-      } catch (e) { }
-    }, 450);
-  } catch (err) {
-    console.error("Print KOT error:", err);
-  }
-}
-
 export function generateClosingReportHtml(data: any): string {
   const logoSrc = LOGO_DATA_URI;
   const restaurantName = data.restaurant?.name || "FOOD SUPPLY ERP";
@@ -766,7 +502,6 @@ export function generateClosingReportHtml(data: any): string {
   const summary = data.summary || {};
   const categories = data.categories || [];
   const items = data.items || [];
-  const orderTypes = data.orderTypes || {};
 
   const categoriesRows = categories.map((cat: any) => `
     <tr>
@@ -853,13 +588,6 @@ export function generateClosingReportHtml(data: any): string {
   <div class="row"><span>Cash Sales (${summary.cashOrdersCount || 0} orders):</span><span class="bold">PKR ${Number(summary.cashSales || 0).toFixed(2)}</span></div>
   <div class="row"><span>Card Sales (${summary.cardOrdersCount || 0} orders):</span><span class="bold">PKR ${Number(summary.cardSales || 0).toFixed(2)}</span></div>
   ${summary.otherSales > 0 ? `<div class="row"><span>Other / Split:</span><span>PKR ${Number(summary.otherSales).toFixed(2)}</span></div>` : ""}
-
-
-
-  <div class="section-title">Order Channels</div>
-  <div class="row"><span>Dine In:</span><span>${orderTypes.dineIn || 0} orders</span></div>
-  <div class="row"><span>Takeaway:</span><span>${orderTypes.takeaway || 0} orders</span></div>
-  <div class="row"><span>Delivery:</span><span>${orderTypes.delivery || 0} orders</span></div>
 
   <div class="dashed-line"></div>
   <div class="section-title">Items Sold by Category</div>

@@ -167,12 +167,9 @@ export default function AdminLoginPage() {
               </div>
             </div>
 
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <button onClick={() => router.push("/pos/login")} className="btn btn-secondary text-sm">
+            <div className="mt-6">
+              <button onClick={() => router.push("/pos/login")} className="btn btn-secondary w-full text-sm">
                 POS Terminal
-              </button>
-              <button onClick={() => router.push("/kds/login")} className="btn btn-secondary text-sm">
-                Kitchen (KDS)
               </button>
             </div>
           </div>

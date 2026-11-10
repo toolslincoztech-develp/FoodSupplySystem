@@ -3,6 +3,53 @@ import { prisma } from "@/lib/db";
 import { verifyToken } from "@/lib/auth";
 import { cookies } from "next/headers";
 
+type NormalizedSizesResult =
+  | { kind: "none" }
+  | { kind: "clear" }
+  | { kind: "valid"; sizesJson: string; basePrice: number }
+  | { kind: "error"; message: string };
+
+function normalizeSizesInput(sizes: unknown): NormalizedSizesResult {
+  if (sizes === undefined) return { kind: "none" };
+  if (sizes === null) return { kind: "clear" };
+
+  if (typeof sizes === "string") {
+    const trimmed = sizes.trim();
+    if (!trimmed) return { kind: "clear" };
+    try {
+      return normalizeSizesInput(JSON.parse(trimmed));
+    } catch {
+      return { kind: "error", message: "Invalid sizes format" };
+    }
+  }
+
+  if (typeof sizes === "object" && !Array.isArray(sizes)) {
+    const normalized: Record<string, number> = {};
+    for (const [rawKey, rawVal] of Object.entries(sizes as Record<string, unknown>)) {
+      const key = rawKey.trim();
+      const price = Number(rawVal);
+      if (!key) continue;
+      if (!Number.isFinite(price) || price < 0) {
+        return { kind: "error", message: `Invalid price for size "${key}"` };
+      }
+      normalized[key] = price;
+    }
+
+    const prices = Object.values(normalized);
+    if (prices.length === 0) {
+      return { kind: "error", message: "Please add at least one size with a valid name and price" };
+    }
+
+    return {
+      kind: "valid",
+      sizesJson: JSON.stringify(normalized),
+      basePrice: Math.min(...prices),
+    };
+  }
+
+  return { kind: "error", message: "Invalid sizes payload" };
+}
+
 export async function GET(req: Request) {
   try {
     const cookieStore = await cookies();
@@ -64,19 +111,14 @@ export async function POST(req: Request) {
     } 
     
     if (action === "ADD_ITEM") {
-      let finalPrice = parseFloat(price || "0");
-      let sizesJson: string | null = null;
-
-      if (sizes && typeof sizes === "object") {
-        sizesJson = JSON.stringify(sizes);
-        if (sizes.Small) {
-          finalPrice = parseFloat(sizes.Small);
-        } else if (sizes.Medium) {
-          finalPrice = parseFloat(sizes.Medium);
-        }
-      } else if (typeof sizes === "string" && sizes.trim()) {
-        sizesJson = sizes;
+      const parsedSizes = normalizeSizesInput(sizes);
+      if (parsedSizes.kind === "error") {
+        return NextResponse.json({ error: parsedSizes.message }, { status: 400 });
       }
+
+      const finalPrice =
+        parsedSizes.kind === "valid" ? parsedSizes.basePrice : parseFloat(price || "0");
+      const sizesJson = parsedSizes.kind === "valid" ? parsedSizes.sizesJson : null;
 
       if (!name || isNaN(finalPrice) || !categoryId) {
         return NextResponse.json({ error: "Name, price, and category are required" }, { status: 400 });
@@ -108,18 +150,23 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Item not found" }, { status: 404 });
       }
 
-      let finalPrice = price ? parseFloat(price) : undefined;
-      let sizesValue: string | null | undefined = undefined;
-
-      if (sizes === null) {
-        sizesValue = null;
-      } else if (sizes && typeof sizes === "object") {
-        sizesValue = JSON.stringify(sizes);
-        if (sizes.Small) finalPrice = parseFloat(sizes.Small);
-        else if (sizes.Medium) finalPrice = parseFloat(sizes.Medium);
-      } else if (typeof sizes === "string" && sizes.trim()) {
-        sizesValue = sizes;
+      const parsedSizes = normalizeSizesInput(sizes);
+      if (parsedSizes.kind === "error") {
+        return NextResponse.json({ error: parsedSizes.message }, { status: 400 });
       }
+
+      const finalPrice =
+        parsedSizes.kind === "valid"
+          ? parsedSizes.basePrice
+          : price !== undefined && price !== ""
+            ? parseFloat(price)
+            : undefined;
+      const sizesValue =
+        parsedSizes.kind === "valid"
+          ? parsedSizes.sizesJson
+          : parsedSizes.kind === "clear"
+            ? null
+            : undefined;
 
       const updated = await prisma.menuItem.update({
         where: { id: existingItem.id },

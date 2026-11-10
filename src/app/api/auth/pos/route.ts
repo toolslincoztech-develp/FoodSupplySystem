@@ -43,7 +43,7 @@ export async function POST(req: Request) {
     const posUsers = await prisma.user.findMany({
       where: {
         restaurantId: restaurant.id,
-        role: { in: ["WAITER", "CASHIER", "KITCHEN_STAFF", "MANAGER", "OWNER", "RIDER"] }
+        role: { in: ["WAITER", "CASHIER", "MANAGER", "OWNER"] }
       }
     });
 
@@ -80,12 +80,7 @@ export async function POST(req: Request) {
       branchId,
     });
 
-    let redirectUrl = "/pos";
-    if (matchedUser.role === "RIDER") {
-      redirectUrl = "/delivery";
-    } else if (matchedUser.role === "KITCHEN_STAFF") {
-      redirectUrl = "/kds";
-    }
+    const redirectUrl = "/pos";
 
     const response = NextResponse.json({ 
       success: true, 

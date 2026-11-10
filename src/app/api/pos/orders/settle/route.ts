@@ -46,14 +46,6 @@ export async function POST(req: Request) {
       }
     });
 
-    // Free the Table if applicable
-    if (order.tableId) {
-      await prisma.restaurantTable.update({
-        where: { id: order.tableId },
-        data: { status: "AVAILABLE" }
-      });
-    }
-
     return NextResponse.json({ success: true, order: updatedOrder });
   } catch (error) {
     console.error("Settle Error:", error);

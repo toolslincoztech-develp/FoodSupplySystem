@@ -29,7 +29,6 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
-  const [typeFilter, setTypeFilter] = useState("ALL");
   const [timeframe, setTimeframe] = useState("all");
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
 
@@ -39,7 +38,6 @@ export default function OrdersPage() {
       const params = new URLSearchParams({
         search,
         status: statusFilter,
-        type: typeFilter,
         timeframe
       });
       const res = await fetch(`/api/admin/orders?${params.toString()}`);
@@ -57,7 +55,7 @@ export default function OrdersPage() {
 
   useEffect(() => {
     fetchOrders();
-  }, [statusFilter, typeFilter, timeframe]);
+  }, [statusFilter, timeframe]);
 
   // Debounced search
   useEffect(() => {
@@ -69,7 +67,7 @@ export default function OrdersPage() {
 
   const exportToCSV = () => {
     if (!orders.length) return;
-    const headers = ["Order #", "Date", "Channel", "Table", "Server", "Status", "Payment Method", "Items Count", "Tax", "Total Amount"];
+    const headers = ["Order #", "Date", "Staff", "Status", "Payment Method", "Items Count", "Tax", "Total Amount"];
     
     const escapeCsv = (val: any) => {
       if (val === null || val === undefined) return '""';
@@ -80,8 +78,6 @@ export default function OrdersPage() {
     const rows = orders.map((o: any) => [
       escapeCsv(o.orderNumber),
       escapeCsv(new Date(o.createdAt).toLocaleString()),
-      escapeCsv(o.orderType),
-      escapeCsv(o.table?.name || "N/A"),
       escapeCsv(o.user?.name || "N/A"),
       escapeCsv(o.status),
       escapeCsv(o.payment?.method || "Unpaid"),
@@ -204,18 +200,6 @@ export default function OrdersPage() {
 
         {/* Dropdown Filters & Search */}
         <div className="flex flex-wrap items-center gap-3">
-          {/* Order Channel */}
-          <select
-            value={typeFilter}
-            onChange={e => setTypeFilter(e.target.value)}
-            className="input bg-surface border border-border text-xs py-2 px-3 rounded-xl font-medium"
-          >
-            <option value="ALL">All Channels</option>
-            <option value="DINE_IN">Dine-In</option>
-            <option value="TAKEAWAY">Takeaway</option>
-            <option value="DELIVERY">Delivery</option>
-          </select>
-
           {/* Timeframe */}
           <select
             value={timeframe}
@@ -250,8 +234,7 @@ export default function OrdersPage() {
               <tr className="bg-surface-2 border-b border-border text-xs uppercase tracking-wider text-muted font-bold">
                 <th className="py-3.5 px-6">Order #</th>
                 <th className="py-3.5 px-4">Date & Time</th>
-                <th className="py-3.5 px-4">Channel</th>
-                <th className="py-3.5 px-4">Table / Server</th>
+                <th className="py-3.5 px-4">Staff</th>
                 <th className="py-3.5 px-4">Items Summary</th>
                 <th className="py-3.5 px-4">Payment</th>
                 <th className="py-3.5 px-4">Status</th>
@@ -262,7 +245,7 @@ export default function OrdersPage() {
             <tbody className="divide-y divide-border">
               {loading && !orders.length ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-muted">
+                  <td colSpan={8} className="py-12 text-center text-muted">
                     <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-2"></div>
                     <p className="text-xs font-semibold">Loading orders...</p>
                   </td>
@@ -281,25 +264,9 @@ export default function OrdersPage() {
                         minute: "2-digit" 
                       })}
                     </td>
-                    <td className="py-3.5 px-4">
-                      <span className={cn(
-                        "text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1 w-max",
-                        order.orderType === "DINE_IN" ? "bg-accent/10 text-accent" :
-                        order.orderType === "TAKEAWAY" ? "bg-warning/10 text-warning" :
-                        "bg-primary/10 text-primary"
-                      )}>
-                        {order.orderType === "DINE_IN" ? <UtensilsCrossed size={12} /> :
-                         order.orderType === "TAKEAWAY" ? <ShoppingBag size={12} /> :
-                         <Bike size={12} />}
-                        {order.orderType.replace("_", " ")}
-                      </span>
-                    </td>
                     <td className="py-3.5 px-4 text-xs">
                       <p className="font-bold text-foreground">
-                        {order.table?.name ? `Table ${order.table.name}` : order.orderType}
-                      </p>
-                      <p className="text-muted text-[11px]">
-                        By {order.user?.name || "Staff"}
+                        {order.user?.name || "Staff"}
                       </p>
                     </td>
                     <td className="py-3.5 px-4 text-xs text-muted max-w-[200px] truncate" title={order.items?.map((it: any) => `${it.quantity}x ${it.menuItem?.name || 'Item'}`).join(", ")}>
@@ -350,7 +317,7 @@ export default function OrdersPage() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-muted">
+                  <td colSpan={8} className="py-12 text-center text-muted">
                     <ShoppingBag size={36} className="mx-auto mb-2 opacity-30" />
                     <p className="font-semibold text-sm">No orders matching your criteria.</p>
                   </td>
@@ -372,7 +339,7 @@ export default function OrdersPage() {
                   <Receipt size={22} className="text-primary" /> Receipt: {selectedOrder.orderNumber}
                 </h2>
                 <p className="text-xs text-muted mt-0.5">
-                  Placed on {new Date(selectedOrder.createdAt).toLocaleString()} • {selectedOrder.orderType.replace("_", " ")}
+                  Placed on {new Date(selectedOrder.createdAt).toLocaleString()}
                 </p>
               </div>
               <button 
@@ -388,12 +355,12 @@ export default function OrdersPage() {
               {/* Order Meta details */}
               <div className="grid grid-cols-2 gap-3 p-3 bg-surface-2 rounded-xl text-xs">
                 <div>
-                  <span className="text-muted block">Table / Location</span>
-                  <strong className="text-foreground">{selectedOrder.table ? `Table ${selectedOrder.table.name}` : selectedOrder.orderType}</strong>
+                  <span className="text-muted block">Order #</span>
+                  <strong className="text-foreground">{selectedOrder.orderNumber}</strong>
                 </div>
                 <div>
                   <span className="text-muted block">Taken By</span>
-                  <strong className="text-foreground">{selectedOrder.user?.name || "Server"}</strong>
+                  <strong className="text-foreground">{selectedOrder.user?.name || "Staff"}</strong>
                 </div>
                 <div>
                   <span className="text-muted block">Payment Method</span>

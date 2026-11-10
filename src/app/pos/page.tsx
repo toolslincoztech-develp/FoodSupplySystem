@@ -16,27 +16,23 @@ import {
   Package,
   AlertCircle,
   RefreshCw,
-  Bike,
   Tag,
   Printer,
   LogOut,
   FileText,
   DollarSign,
-  CheckCircle2,
-  User
+  CheckCircle2
 } from "lucide-react";
 import { cn, formatCurrency, stripEmojis } from "@/lib/utils";
 import { useCartStore } from "@/stores/useCartStore";
-import { printReceipt, printKitchenTicket, printClosingReport } from "@/lib/receipt";
+import { printReceipt, printClosingReport } from "@/lib/receipt";
 
 export default function POSPage() {
   const [activeCategory, setActiveCategory] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState("");
-  const [view, setView] = useState<"TABLES" | "MENU" | "ACTIVE_BILLS" | "DAILY_CLOSING">("TABLES");
+  const [view, setView] = useState<"MENU" | "ACTIVE_BILLS" | "DAILY_CLOSING">("MENU");
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [selectedPizzaItem, setSelectedPizzaItem] = useState<any>(null); // Mobile cart toggle
-  const [showDeliveryModal, setShowDeliveryModal] = useState(false);
-  const [showTakeawayModal, setShowTakeawayModal] = useState(false);
 
   // Daily Closing States
   const [closingData, setClosingData] = useState<any>(null);
@@ -44,49 +40,30 @@ export default function POSPage() {
   const [closingScope, setClosingScope] = useState<"cashier" | "all">("all");
 
   // Database States
-  const [tables, setTables] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [menuItems, setMenuItems] = useState<any[]>([]);
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
-  const [riders, setRiders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   const {
     items: cartItems,
-    selectedTable,
-    selectedTableName,
-    orderType,
     addItem,
-    removeItem,
     updateQuantity,
-    setTable,
-    setOrderType,
     getSubtotal,
     getTax,
     getTotal,
-    discount,
     discountType,
     discountValue,
     setDiscount,
     getDiscountAmount,
-    deliveryFee,
-    setDeliveryFee,
     clearCart,
     resetOrder,
     existingOrderId,
     setExistingOrderId,
     setOriginalItems,
-    getNewlyAddedItems,
     paymentMethod,
     setPaymentMethod,
-    customerName,
-    customerPhone,
-    customerAddress,
-    riderId,
-    riderName,
-    setCustomerDetails,
-    setRider,
     hasTax,
     taxRate,
     setTaxConfig
@@ -94,15 +71,13 @@ export default function POSPage() {
 
   const fetchInitData = async () => {
     try {
-      // Single optimized request delivering tables, menu, riders, and active orders in parallel (<300ms)
+      // Single optimized request delivering menu and active orders in parallel (<300ms)
       const res = await fetch("/api/pos/init");
       if (res.ok) {
         const json = await res.json();
         const data = json.data || {};
-        setTables(data.tables || []);
         setCategories(data.categories || []);
         setMenuItems(data.menuItems || []);
-        setRiders(data.riders || []);
         if (data.activeOrders) {
           setActiveOrders(data.activeOrders);
         }
@@ -148,86 +123,6 @@ export default function POSPage() {
     return matchesCategory && matchesSearch;
   });
 
-  const handleTableSelect = async (tableId: string, tableName: string, status: string) => {
-    if (status === "OCCUPIED" || status === "RESERVED") {
-      try {
-        const res = await fetch(`/api/pos/orders?tableId=${tableId}`);
-        const data = await res.json();
-        if (data.success && data.activeOrder) {
-          clearCart();
-          const activeTable = data.activeOrder.table;
-          const formattedTableName = activeTable ? (activeTable.floor ? `${activeTable.floor} - ${activeTable.name}` : activeTable.name) : tableName;
-          setTable(tableId, formattedTableName);
-          setOrderType("DINE_IN");
-          setExistingOrderId(data.activeOrder.id);
-          if (data.activeOrder.discount > 0) {
-            setDiscount(data.activeOrder.discount, "FLAT");
-          }
-
-          data.activeOrder.items.forEach((item: any) => {
-            const sizeMatch = item.notes?.match(/Size:\s*([A-Za-z0-9]+)/);
-            const size = sizeMatch ? sizeMatch[1] : undefined;
-            const displayName = size ? `${item.menuItem.name} (${size})` : item.menuItem.name;
-            addItem({
-              menuItemId: item.menuItemId,
-              name: displayName,
-              price: item.price,
-              size: size,
-              notes: item.notes
-            });
-            const stateItems = useCartStore.getState().items;
-            useCartStore.getState().updateQuantity(stateItems[stateItems.length - 1].id, item.quantity);
-          });
-
-          setOriginalItems(useCartStore.getState().items);
-          setView("MENU");
-          return;
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
-    clearCart();
-    setTable(tableId, tableName);
-    setOrderType("DINE_IN");
-    setExistingOrderId(null);
-
-    // Mark selected table as RESERVED
-    try {
-      await fetch("/api/pos/tables/status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tableId, status: "RESERVED" })
-      });
-      setTables(prev => prev.map(t => t.id === tableId ? { ...t, status: "RESERVED" } : t));
-    } catch (e) {
-      console.error(e);
-    }
-
-    setView("MENU");
-  };
-
-  const handleDineIn = () => {
-    resetOrder();
-    setOrderType("DINE_IN");
-    setView("TABLES");
-  };
-
-  const handleTakeaway = () => {
-    setTable(null, null);
-    setOrderType("TAKEAWAY");
-    setShowTakeawayModal(true);
-    setView("MENU");
-  };
-
-  const handleDelivery = () => {
-    setTable(null, null);
-    setOrderType("DELIVERY");
-    setShowDeliveryModal(true);
-    setView("MENU");
-  };
-
   const handleItemClick = (item: any) => {
     if (!item.isAvailable) return;
     if (item.sizes) {
@@ -255,52 +150,12 @@ export default function POSPage() {
     setSelectedPizzaItem(null);
   };
 
-  const printKOT = (
-    win: Window | null,
-    orderNum: string,
-    type: string,
-    tableName?: string | null,
-    items: { name: string; quantity: number; notes?: string }[] = [],
-    deliveryInfo?: { name?: string; phone?: string; address?: string; riderName?: string; deliveryFee?: number },
-    isAddition?: boolean
-  ) => {
-    printKitchenTicket(win, {
-      orderNum,
-      type,
-      tableName,
-      items,
-      deliveryInfo,
-      isAddition
-    });
-  };
-
   const printUnpaidReceipt = (order: any) => {
-    printReceipt({
-      ...order,
-      deliveryFee: deliveryFee || order.deliveryFee || 0
-    }, { paymentStatus: "UNPAID" });
+    printReceipt(order, { paymentStatus: "UNPAID" });
   };
 
   const handleCheckout = async () => {
     if (cartItems.length === 0) return;
-
-    if (orderType === "DINE_IN" && !selectedTable) {
-      alert("Please select a table first for Dine In orders.");
-      setView("TABLES");
-      return;
-    }
-
-    const isAddingToExistingOrder = Boolean(existingOrderId);
-    const newlyAddedItems = isAddingToExistingOrder ? getNewlyAddedItems() : [];
-    const hasNewItemsToSend = !isAddingToExistingOrder || newlyAddedItems.length > 0;
-
-    // Open print window synchronously on user click so popup is never blocked, ONLY if there are items to print
-    const printWindow = (hasNewItemsToSend && typeof window !== "undefined")
-      ? window.open("", "_blank", "width=380,height=600")
-      : null;
-    if (printWindow) {
-      printWindow.document.write("<p style='font-family:monospace;text-align:center;margin-top:30px;'>Generating Kitchen Ticket...</p>");
-    }
 
     setSubmitting(true);
 
@@ -312,84 +167,30 @@ export default function POSPage() {
         notes: item.notes || ""
       }));
 
-      // Attach delivery details to the first item if applicable
-      if (orderType === "DELIVERY" && customerName && checkoutItems.length > 0) {
-        const riderText = riderName ? ` | Rider: ${riderName}` : "";
-        const deliveryFeeText = deliveryFee > 0 ? ` | Delivery Fee: Rs ${deliveryFee}` : "";
-        checkoutItems[0].notes = `${checkoutItems[0].notes ? checkoutItems[0].notes + " | " : ""}Delivery To: ${customerName} (${customerPhone}) - Address: ${customerAddress}${riderText}${deliveryFeeText}`;
-      }
-
-      // Attach takeaway customer details to the first item if applicable
-      if (orderType === "TAKEAWAY" && (customerName || customerPhone) && checkoutItems.length > 0) {
-        const cName = (customerName || "").trim() || "Customer";
-        const cPhone = (customerPhone || "").trim();
-        const phoneText = cPhone ? ` (${cPhone})` : "";
-        checkoutItems[0].notes = `${checkoutItems[0].notes ? checkoutItems[0].notes + " | " : ""}Takeaway For: ${cName}${phoneText}`;
-      }
-
       const res = await fetch("/api/pos/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          tableId: selectedTable,
-          orderType,
+          orderType: "POS",
           items: checkoutItems,
           subtotal: getSubtotal(),
           tax: getTax(),
           discount: getDiscountAmount(),
-          deliveryFee: deliveryFee || 0,
           total: getTotal(),
-          existingOrderId,
-          riderId: orderType === "DELIVERY" ? (riderId || null) : null
+          existingOrderId
         })
       });
 
       if (res.ok) {
-        const responseData = await res.json();
-        const savedOrder = responseData.order;
-
-        // Auto-print KOT ticket for kitchen ONLY if there are new items to prepare!
-        if (hasNewItemsToSend && printWindow) {
-          const itemsToPrint = isAddingToExistingOrder ? newlyAddedItems : cartItems;
-          printKOT(
-            printWindow,
-            savedOrder?.orderNumber || (existingOrderId ? "UPDATE" : "NEW"),
-            orderType,
-            selectedTableName,
-            itemsToPrint.map(item => ({
-              name: item.name,
-              quantity: item.quantity,
-              notes: item.notes
-            })),
-            orderType === "DELIVERY" ? {
-              name: customerName,
-              phone: customerPhone,
-              address: customerAddress,
-              riderName: riderName || undefined,
-              deliveryFee: deliveryFee > 0 ? deliveryFee : undefined
-            } : (orderType === "TAKEAWAY" && (customerName || customerPhone)) ? {
-              name: customerName,
-              phone: customerPhone
-            } : undefined,
-            isAddingToExistingOrder
-          );
-        } else if (printWindow) {
-          printWindow.close();
-        }
-
         resetOrder();
-        setShowDeliveryModal(false);
-        setShowTakeawayModal(false);
-        fetchInitData(); // Refresh tables and active orders
-        setView("TABLES");
+        fetchInitData(); // Refresh active orders
+        setView("MENU");
         setIsCartOpen(false);
       } else {
-        if (printWindow) printWindow.close();
         const data = await res.json();
         alert(data.error || "Failed to place order");
       }
     } catch (error) {
-      if (printWindow) printWindow.close();
       alert("Network error.");
     } finally {
       setSubmitting(false);
@@ -402,33 +203,18 @@ export default function POSPage() {
     return <div className="h-screen w-full flex items-center justify-center bg-background"><div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div></div>;
   }
 
-  // Group tables by floor
-  const floors = Array.from(new Set(tables.map(t => t.floor)));
-
   return (
     <div className="h-screen w-full bg-background flex overflow-hidden relative">
-      {/* Left Area - Tables or Menu */}
+      {/* Left Area - Menu, Active Bills, or Daily Closing */}
       <div className="flex-1 flex flex-col h-full bg-surface-2 lg:border-r border-border w-full">
         {/* Header */}
         <header className="h-16 px-4 lg:px-6 border-b border-border flex items-center justify-between bg-surface shadow-sm z-10">
           <div className="flex items-center gap-2 lg:gap-4">
-            {view === "MENU" || view === "DAILY_CLOSING" ? (
+            {view === "DAILY_CLOSING" ? (
               <button
-                onClick={async () => {
-                  if (view === "MENU" && !existingOrderId && selectedTable) {
-                    try {
-                      await fetch("/api/pos/tables/status", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ tableId: selectedTable, status: "AVAILABLE" })
-                      });
-                      setTables(prev => prev.map(t => t.id === selectedTable ? { ...t, status: "AVAILABLE" } : t));
-                    } catch (e) { }
-                  }
-                  setView("TABLES");
-                }}
+                onClick={() => setView("MENU")}
                 className="btn btn-ghost !p-2"
-                title="Back to Tables"
+                title="Back to Menu"
               >
                 <ChevronLeft size={20} />
               </button>
@@ -442,10 +228,10 @@ export default function POSPage() {
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1 lg:gap-2 bg-surface-3 p-1 rounded-lg">
               <button
-                className={cn("px-3 lg:px-4 py-1.5 text-xs lg:text-sm font-semibold rounded-md transition-colors", view === "TABLES" ? "bg-primary text-white" : "text-muted hover:text-foreground")}
-                onClick={() => setView("TABLES")}
+                className={cn("px-3 lg:px-4 py-1.5 text-xs lg:text-sm font-semibold rounded-md transition-colors", view === "MENU" ? "bg-primary text-white" : "text-muted hover:text-foreground")}
+                onClick={() => setView("MENU")}
               >
-                Tables
+                Menu
               </button>
               <button
                 className={cn("px-3 lg:px-4 py-1.5 text-xs lg:text-sm font-semibold rounded-md transition-colors relative", view === "ACTIVE_BILLS" ? "bg-primary text-white" : "text-muted hover:text-foreground")}
@@ -457,19 +243,6 @@ export default function POSPage() {
                     {activeOrders.length}
                   </span>
                 )}
-              </button>
-              <button
-                className={cn("px-3 lg:px-4 py-1.5 text-xs lg:text-sm font-semibold rounded-md transition-colors", view === "MENU" ? "bg-primary text-white" : "text-muted hover:text-foreground")}
-                onClick={() => {
-                  if (orderType === "DINE_IN" && !selectedTable) {
-                    alert("Please select a table first for Dine In orders.");
-                    setView("TABLES");
-                    return;
-                  }
-                  setView("MENU");
-                }}
-              >
-                Menu
               </button>
               <button
                 className={cn(
@@ -521,84 +294,7 @@ export default function POSPage() {
           </div>
         </header>
 
-        {view === "TABLES" ? (
-          /* Table Selection View */
-          <div className="flex-1 overflow-y-auto p-4 lg:p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-              <div>
-                <h2 className="text-lg lg:text-xl font-bold flex items-center gap-2">
-                  <UtensilsCrossed size={20} className="text-primary" /> Select Table
-                </h2>
-                <p className="text-xs text-muted font-medium mt-0.5">
-                  {orderType === "DINE_IN"
-                    ? "Step 1: Choose an available table below to start Dine In order"
-                    : "Select a table or switch order type"}
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={handleDineIn}
-                  className={cn(
-                    "btn text-xs lg:text-sm border transition-all",
-                    orderType === "DINE_IN"
-                      ? "btn-primary shadow-sm"
-                      : "btn-secondary border-border"
-                  )}
-                >
-                  <UtensilsCrossed className="w-4 h-4 mr-1 lg:mr-2 hidden sm:block" /> Dine In
-                </button>
-                <button
-                  onClick={handleTakeaway}
-                  className={cn(
-                    "btn text-xs lg:text-sm border transition-all",
-                    orderType === "TAKEAWAY"
-                      ? "btn-primary shadow-sm"
-                      : "btn-secondary border-border"
-                  )}
-                >
-                  <Package className="w-4 h-4 mr-1 lg:mr-2 hidden sm:block" /> Takeaway
-                </button>
-                <button
-                  onClick={handleDelivery}
-                  className={cn(
-                    "btn text-xs lg:text-sm border transition-all",
-                    orderType === "DELIVERY"
-                      ? "btn-primary shadow-sm"
-                      : "btn-secondary border-border"
-                  )}
-                >
-                  <Bike className="w-4 h-4 mr-1 lg:mr-2 hidden sm:block" /> Delivery
-                </button>
-              </div>
-            </div>
-
-            {floors.map(floor => (
-              <div key={floor} className="mb-8">
-                <h3 className="text-xs lg:text-sm font-semibold text-muted uppercase tracking-wider mb-4">{floor}</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 lg:gap-4">
-                  {tables.filter(t => t.floor === floor).map(table => (
-                    <button
-                      key={table.id}
-                      onClick={() => handleTableSelect(table.id, table.floor ? `${table.floor} - ${table.name}` : table.name, table.status)}
-                      className={cn(
-                        "relative aspect-square rounded-2xl border-2 flex flex-col items-center justify-center p-2 lg:p-4 transition-all hover:scale-105 active:scale-95",
-                        table.status === "AVAILABLE" && "border-success-muted bg-success-muted/20 text-success hover:border-success",
-                        table.status === "OCCUPIED" && "border-warning-muted bg-warning-muted/20 text-warning opacity-80 hover:opacity-100",
-                        table.status === "RESERVED" && "border-warning bg-warning/15 text-warning font-semibold hover:border-warning/80"
-                      )}
-                    >
-                      <span className="text-xl lg:text-2xl font-bold mb-1">{table.name}</span>
-                      <span className="text-[10px] lg:text-xs font-semibold uppercase">{table.status}</span>
-                      <div className="absolute top-2 right-2 text-[10px] bg-background/80 px-1.5 py-0.5 rounded-full font-medium">
-                        {table.capacity}p
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : view === "ACTIVE_BILLS" ? (
+        {view === "ACTIVE_BILLS" ? (
           /* Active Bills View */
           <div className="flex-1 overflow-y-auto p-4 lg:p-6">
             <div className="flex justify-between items-center mb-6">
@@ -613,26 +309,11 @@ export default function POSPage() {
                   <div>
                     <div className="flex justify-between items-start mb-2">
                       <span className="font-bold text-lg text-primary">{order.orderNumber}</span>
-                      <span className="badge bg-surface-3">{order.orderType}</span>
+                      <span className="badge bg-surface-3">{order.status}</span>
                     </div>
-                    <p className="text-sm font-semibold mb-1">
-                      {order.table?.name ? `Table: ${order.table.floor ? `${order.table.floor} - ${order.table.name}` : order.table.name}` : order.orderType === "DELIVERY" ? "Delivery Order" : order.orderType === "DINE_IN" ? "Dine In" : "Takeaway"}
+                    <p className="text-xs text-muted mb-1 font-medium">
+                      Cashier: <span className="text-foreground font-semibold">{order.user?.name || "Staff"}</span>
                     </p>
-                    {order.orderType === "DELIVERY" && (
-                      <p className="text-xs text-primary font-medium mb-1 flex items-center gap-1">
-                        <Bike size={13} /> {order.rider?.name ? `Rider: ${order.rider.name}` : "Rider: Unassigned"}
-                      </p>
-                    )}
-                    {order.orderType === "TAKEAWAY" && (() => {
-                      const firstNote = order.items?.[0]?.notes || "";
-                      const m = firstNote.match(/Takeaway For:\s*([^(|]+)(?:\(([^)]*)\))?/);
-                      if (!m) return null;
-                      return (
-                        <p className="text-xs text-muted mb-1 flex items-center gap-1 font-medium">
-                          <User size={13} className="text-warning" /> Customer: <span className="text-foreground font-semibold">{m[1].trim()}</span>{m[2] ? ` (${m[2].trim()})` : ""}
-                        </p>
-                      );
-                    })()}
                     <p className="text-xs text-muted mb-4">{order.items.length} items • {formatCurrency(order.total)}</p>
                   </div>
 
@@ -641,8 +322,8 @@ export default function POSPage() {
                       onClick={() => {
                         clearCart();
                         order.items.forEach((item: any) => {
-                          const sizeMatch = item.notes?.match(/Size:\s*([A-Za-z0-9]+)/);
-                          const size = sizeMatch ? sizeMatch[1] : undefined;
+                          const sizeMatch = item.notes?.match(/Size:\s*(.+?)(?:\s*\||$)/);
+                          const size = sizeMatch ? sizeMatch[1].trim() : undefined;
                           const displayName = size ? `${item.menuItem?.name || "Item"} (${size})` : (item.menuItem?.name || "Item");
                           addItem({
                             menuItemId: item.menuItemId,
@@ -654,29 +335,7 @@ export default function POSPage() {
                           const stateItems = useCartStore.getState().items;
                           useCartStore.getState().updateQuantity(stateItems[stateItems.length - 1].id, item.quantity);
                         });
-                        const firstNote = order.items?.[0]?.notes || "";
-                        const deliveryMatch = firstNote.match(/Delivery To:\s*([^(]+)\s*(?:\(([^)]*)\))?(?:\s*-\s*Address:\s*([^|]*))?/);
-                        if (deliveryMatch) {
-                          setCustomerDetails(
-                            deliveryMatch[1]?.trim() || "",
-                            deliveryMatch[2]?.trim() || "",
-                            deliveryMatch[3]?.trim() || "",
-                            order.riderId,
-                            order.rider?.name
-                          );
-                        } else {
-                          const takeawayMatch = firstNote.match(/Takeaway For:\s*([^(|]+)(?:\(([^)]*)\))?/);
-                          if (takeawayMatch) {
-                            setCustomerDetails(
-                              takeawayMatch[1]?.trim() || "",
-                              takeawayMatch[2]?.trim() || "",
-                              ""
-                            );
-                          }
-                        }
                         setExistingOrderId(order.id);
-                        setTable(order.tableId, order.table ? (order.table.floor ? `${order.table.floor} - ${order.table.name}` : order.table.name) : null);
-                        setOrderType(order.orderType);
                         setOriginalItems(useCartStore.getState().items);
                         setView("MENU");
                       }}
@@ -1002,39 +661,6 @@ export default function POSPage() {
                       </div>
                     )}
                   </div>
-
-                  {/* Channel Summary (Dine In / Takeaway / Delivery) */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pb-6">
-                    <div className="bg-surface p-4 rounded-xl border border-border">
-                      <div className="text-xs font-bold text-muted uppercase">Dine In</div>
-                      <div className="text-lg font-bold text-foreground mt-1">
-                        {formatCurrency(closingData.channels?.dineIn?.sales || 0)}
-                      </div>
-                      <div className="text-xs text-muted mt-0.5">
-                        {closingData.channels?.dineIn?.orders || 0} orders
-                      </div>
-                    </div>
-                    <div className="bg-surface p-4 rounded-xl border border-border">
-                      <div className="text-xs font-bold text-muted uppercase">Takeaway</div>
-                      <div className="text-lg font-bold text-foreground mt-1">
-                        {formatCurrency(closingData.channels?.takeaway?.sales || 0)}
-                      </div>
-                      <div className="text-xs text-muted mt-0.5">
-                        {closingData.channels?.takeaway?.orders || 0} orders
-                      </div>
-                    </div>
-                    <div className="bg-surface p-4 rounded-xl border border-border">
-                      <div className="text-xs font-bold text-muted uppercase">Delivery</div>
-                      <div className="text-lg font-bold text-foreground mt-1">
-                        {formatCurrency(closingData.channels?.delivery?.sales || 0)}
-                      </div>
-                      <div className="text-xs text-muted mt-0.5">
-                        {closingData.channels?.delivery?.orders || 0} orders
-                      </div>
-                    </div>
-                  </div>
-
-
                 </>
               ) : null}
             </div>
@@ -1094,8 +720,11 @@ export default function POSPage() {
                       parsedSizes = typeof item.sizes === 'string' ? JSON.parse(item.sizes) : item.sizes;
                     } catch (e) { }
                   }
-                  const hasMultipleSizes = parsedSizes && Object.keys(parsedSizes).length > 0;
-                  const startingPrice = hasMultipleSizes && parsedSizes ? Math.min(...Object.values(parsedSizes)) : item.price;
+                  const sizeEntries = parsedSizes
+                    ? Object.entries(parsedSizes).filter(([, p]) => typeof p === 'number' && Number.isFinite(p) && p > 0)
+                    : [];
+                  const hasMultipleSizes = sizeEntries.length > 0;
+                  const startingPrice = hasMultipleSizes ? Math.min(...sizeEntries.map(([, p]) => p)) : item.price;
 
                   return (
                     <button
@@ -1109,7 +738,7 @@ export default function POSPage() {
                     >
                       {hasMultipleSizes && (
                         <div className="absolute top-2 right-2 z-10 bg-amber-500/20 text-amber-500 border border-amber-500/30 text-[10px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm backdrop-blur-md">
-                          🍕 4 Sizes
+                          {sizeEntries.length} {sizeEntries.length === 1 ? "Size" : "Sizes"}
                         </div>
                       )}
                       <div className="w-full aspect-video bg-surface-3 rounded-lg mb-2 lg:mb-3 flex items-center justify-center overflow-hidden flex-shrink-0 relative">
@@ -1176,32 +805,8 @@ export default function POSPage() {
               <ShoppingCart className="w-4 h-4 lg:w-5 lg:h-5 text-primary" /> Current Order
             </h2>
             <div className="text-[11px] lg:text-xs text-muted mt-0.5 font-medium flex items-center gap-2">
-              {orderType === "DINE_IN" ? (
-                <>
-                  <span className="w-2 h-2 rounded-full bg-success"></span>
-                  Dine-in {selectedTableName ? `• Table ${selectedTableName}` : "(No table)"}
-                </>
-              ) : orderType === "DELIVERY" ? (
-                <button
-                  type="button"
-                  onClick={() => setShowDeliveryModal(true)}
-                  className="hover:underline flex items-center gap-1 text-left"
-                  title="Click to view/edit delivery and rider details"
-                >
-                  <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                  <span>Delivery {riderName ? `• ${riderName}` : "• (Assign Rider)"}</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setShowTakeawayModal(true)}
-                  className="hover:underline flex items-center gap-1 text-left"
-                  title="Click to view/edit takeaway customer details"
-                >
-                  <span className="w-2 h-2 rounded-full bg-warning"></span>
-                  <span>Takeaway {customerName ? ` • ${customerName}` : " • (Add Customer)"}</span>
-                </button>
-              )}
+              <span className="w-2 h-2 rounded-full bg-success"></span>
+              {existingOrderId ? "Editing Running Order" : "Direct Order"}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -1347,60 +952,6 @@ export default function POSPage() {
             </div>
           </div>
 
-          {/* Delivery Charges Section */}
-          <div className="bg-surface p-2 rounded-xl border border-border mb-2.5 space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold text-foreground flex items-center gap-1 uppercase tracking-wider">
-                <Bike size={12} className="text-primary" /> Delivery Charges
-              </span>
-              <div className="flex gap-1">
-                {[50, 100, 150, 200].map((fee) => (
-                  <button
-                    key={fee}
-                    type="button"
-                    onClick={() => setDeliveryFee(deliveryFee === fee ? 0 : fee)}
-                    className={cn(
-                      "py-0.5 px-1.5 text-[10px] font-bold rounded-md border transition-all",
-                      deliveryFee === fee
-                        ? "bg-primary text-white border-primary shadow-sm"
-                        : "bg-surface-2 border-border text-muted hover:text-foreground hover:bg-surface-3"
-                    )}
-                  >
-                    +{fee}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="relative">
-              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted text-[11px] font-bold">
-                Rs
-              </span>
-              <input
-                type="number"
-                min="0"
-                step="10"
-                placeholder="Enter charges (e.g. 100)"
-                value={deliveryFee === 0 ? "" : deliveryFee}
-                onChange={(e) => {
-                  const val = Math.max(0, parseFloat(e.target.value) || 0);
-                  setDeliveryFee(val);
-                }}
-                className="input w-full bg-surface-2 border-border pl-8 pr-6 text-xs font-bold h-7 lg:h-8 py-0"
-              />
-              {deliveryFee > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setDeliveryFee(0)}
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted hover:text-danger text-xs p-0.5"
-                  title="Remove delivery charges"
-                >
-                  <X size={12} />
-                </button>
-              )}
-            </div>
-          </div>
-
           <div className="space-y-1 text-xs mb-2.5">
             <div className="flex justify-between text-muted font-medium">
               <span>Subtotal</span>
@@ -1412,14 +963,6 @@ export default function POSPage() {
                   <Tag size={11} /> Discount ({discountType === "PERCENTAGE" ? `${discountValue}%` : "Flat"})
                 </span>
                 <span>-{formatCurrency(getDiscountAmount())}</span>
-              </div>
-            )}
-            {deliveryFee > 0 && (
-              <div className="flex justify-between text-primary font-semibold">
-                <span className="flex items-center gap-1">
-                  <Bike size={11} /> Delivery Charges
-                </span>
-                <span>+{formatCurrency(deliveryFee)}</span>
               </div>
             )}
             {hasTax && taxRate > 0 && (
@@ -1465,89 +1008,21 @@ export default function POSPage() {
             onClick={handleCheckout}
           >
             <span className="relative z-10 flex items-center justify-center gap-2">
-              {submitting ? "Processing..." : existingOrderId ? "Update Running Order" : "Send to Kitchen (KDS)"}
+              {submitting ? "Processing..." : existingOrderId ? "Update Running Order" : "Place Order"}
             </span>
             <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out" />
           </button>
         </div>
       </div>
 
-
-      {/* Takeaway Customer Details Modal */}
-      {showTakeawayModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-surface rounded-2xl p-6 w-full max-w-md shadow-2xl animate-scale-in border border-border">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-xl font-bold flex items-center gap-2">
-                  <Package size={22} className="text-warning" /> Takeaway Customer
-                </h2>
-                <p className="text-xs text-muted mt-0.5">Attach customer details to this takeaway order</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowTakeawayModal(false)}
-                className="w-9 h-9 rounded-xl border border-border bg-surface-2 hover:bg-surface-3 text-muted hover:text-foreground flex items-center justify-center transition-colors"
-                title="Go Back / Close"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-muted mb-1">Customer Name</label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={17} />
-                  <input
-                    type="text"
-                    value={customerName || ""}
-                    onChange={e => setCustomerDetails(e.target.value, customerPhone || "", "")}
-                    className="input w-full bg-surface-2 pl-10"
-                    placeholder="e.g. Usman Khan"
-                    autoFocus
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-muted mb-1">Phone Number</label>
-                <input
-                  type="tel"
-                  value={customerPhone || ""}
-                  onChange={e => setCustomerDetails(customerName || "", e.target.value, "")}
-                  className="input w-full bg-surface-2"
-                  placeholder="e.g. 0300 1234567"
-                />
-              </div>
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowTakeawayModal(false)}
-                  className="btn btn-secondary flex-1 h-11 text-sm font-semibold"
-                >
-                  Quick / Walk-in
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowTakeawayModal(false)}
-                  className="btn btn-primary flex-1 h-11 text-sm font-bold"
-                >
-                  Save Details
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delivery Details Modal */}
-      {/* Pizza Size Selection Modal */}
+      {/* Size Selection Modal */}
       {selectedPizzaItem && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-surface rounded-2xl p-6 w-full max-w-md shadow-2xl border border-border animate-scale-in">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-xl font-bold flex items-center gap-2">
-                  <span className="text-2xl">🍕</span> Select Pizza Size
+                  <UtensilsCrossed size={20} className="text-primary" /> Select Size / Variant
                 </h2>
                 <p className="text-xs text-muted mt-0.5 font-medium">{selectedPizzaItem.name}</p>
               </div>
@@ -1559,18 +1034,12 @@ export default function POSPage() {
               </button>
             </div>
 
-            <p className="text-xs text-muted mb-4">Select one of the 4 sizes to add to order:</p>
+            <p className="text-xs text-muted mb-4">Select an available size or option to add to order:</p>
 
             <div className="grid grid-cols-2 gap-3 mb-6">
-              {(['Small', 'Medium', 'Large', 'XL'] as const).map((sizeKey) => {
-                const price = selectedPizzaItem.parsedSizes?.[sizeKey];
-                const isAvailable = typeof price === 'number' && price > 0;
-                const sizeDescriptions: Record<string, string> = {
-                  Small: 'Personal Size',
-                  Medium: 'Medium Size',
-                  Large: 'Large / Family',
-                  XL: 'Extra Large Jumbo'
-                };
+              {Object.entries(selectedPizzaItem.parsedSizes || {}).map(([sizeKey, rawPrice]) => {
+                const price = Number(rawPrice);
+                const isAvailable = Number.isFinite(price) && price > 0;
 
                 return (
                   <button
@@ -1585,11 +1054,8 @@ export default function POSPage() {
                         : "bg-surface-2/40 border-border/40 opacity-40 cursor-not-allowed"
                     )}
                   >
-                    <span className="text-base font-extrabold text-foreground group-hover:text-primary transition-colors">
+                    <span className="text-base font-extrabold text-foreground group-hover:text-primary transition-colors mb-2">
                       {sizeKey}
-                    </span>
-                    <span className="text-[10px] text-muted mb-2 font-medium">
-                      {sizeDescriptions[sizeKey] || sizeKey}
                     </span>
                     <span className="text-sm font-bold text-primary px-2.5 py-0.5 rounded-md bg-primary/10">
                       {isAvailable ? formatCurrency(price) : 'N/A'}
@@ -1609,91 +1075,6 @@ export default function POSPage() {
           </div>
         </div>
       )}
-
-      {showDeliveryModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-surface rounded-2xl p-6 w-full max-w-md shadow-2xl animate-scale-in border border-border">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold flex items-center gap-2">
-                <Bike size={24} className="text-primary" /> Delivery Details
-              </h2>
-              <button
-                type="button"
-                onClick={() => setShowDeliveryModal(false)}
-                className="w-9 h-9 rounded-xl border border-border bg-surface-2 hover:bg-surface-3 text-muted hover:text-foreground flex items-center justify-center transition-colors"
-                title="Go Back / Close"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-muted mb-1">Customer Name</label>
-                <input
-                  type="text"
-                  value={customerName || ""}
-                  onChange={e => setCustomerDetails(e.target.value, customerPhone || "", customerAddress || "")}
-                  className="input w-full bg-surface-2"
-                  placeholder="John Doe"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-muted mb-1">Phone Number</label>
-                <input
-                  type="tel"
-                  value={customerPhone || ""}
-                  onChange={e => setCustomerDetails(customerName || "", e.target.value, customerAddress || "")}
-                  className="input w-full bg-surface-2"
-                  placeholder="0300 1234567"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-muted mb-1">Delivery Address</label>
-                <textarea
-                  value={customerAddress || ""}
-                  onChange={e => setCustomerDetails(customerName || "", customerPhone || "", e.target.value)}
-                  className="input w-full bg-surface-2 min-h-[80px] resize-none"
-                  placeholder="Street, Area, City"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-muted mb-1 flex items-center justify-between">
-                  <span>Assign Rider</span>
-                  <span className="text-[11px] font-normal text-muted">(Optional)</span>
-                </label>
-                <select
-                  value={riderId || ""}
-                  onChange={e => {
-                    const selectedId = e.target.value;
-                    const r = riders.find((rd: any) => rd.id === selectedId);
-                    setRider(selectedId || null, r ? r.name : null);
-                  }}
-                  className="input w-full bg-surface-2 cursor-pointer"
-                >
-                  <option value="">-- Unassigned / Assign Later --</option>
-                  {riders.map((r: any) => (
-                    <option key={r.id} value={r.id}>
-                      {r.name} {r.phone ? `(${r.phone})` : ""}
-                    </option>
-                  ))}
-                </select>
-                {riders.length === 0 && (
-                  <p className="text-[11px] text-muted mt-1">No riders registered in Staff list yet. You can also assign from the Delivery screen later.</p>
-                )}
-              </div>
-              <button
-                onClick={() => setShowDeliveryModal(false)}
-                className="btn btn-primary w-full h-12 text-base font-bold mt-2 disabled:opacity-50"
-                disabled={!customerName || !customerPhone || !customerAddress}
-              >
-                Confirm Delivery Details
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-
     </div>
   );
 }

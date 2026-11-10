@@ -99,7 +99,7 @@ export default function HRPage() {
           <h1 className="text-3xl font-bold tracking-tight mb-1 flex items-center gap-3">
             <Users className="text-primary" /> Staff & HR Management
           </h1>
-          <p className="text-muted">Manage your food supply employees, waiters, and kitchen staff.</p>
+          <p className="text-muted">Manage your food supply employees, cashiers, and staff.</p>
         </div>
         <button 
           onClick={() => setIsAdding(!isAdding)}
@@ -124,16 +124,14 @@ export default function HRPage() {
             <div>
               <label className="block text-sm font-semibold mb-1">Password / POS PIN</label>
               <input type="text" required value={password} onChange={e => setPassword(e.target.value)} className="input bg-surface border-border w-full" placeholder="e.g. 1234 or strongpass" />
-              <p className="text-[10px] text-muted mt-1">Waiters and Cashiers will use this as their POS PIN.</p>
+              <p className="text-[10px] text-muted mt-1">Cashiers and Sales Staff will use this as their POS PIN.</p>
             </div>
             <div>
               <label className="block text-sm font-semibold mb-1">Role</label>
               <select value={role} onChange={e => setRole(e.target.value)} className="input bg-surface border-border w-full">
-                <option value="WAITER">Waiter</option>
                 <option value="CASHIER">Cashier</option>
-                <option value="KITCHEN_STAFF">Kitchen Staff (Chef)</option>
+                <option value="WAITER">Sales Staff</option>
                 <option value="MANAGER">Manager</option>
-                <option value="RIDER">Delivery Rider</option>
               </select>
             </div>
             <div className="md:col-span-2 mt-4">
@@ -174,8 +172,6 @@ export default function HRPage() {
                   <span className={cn(
                     "px-2.5 py-1 rounded-md text-xs font-bold flex items-center gap-1 w-max",
                     user.role === "OWNER" || user.role === "MANAGER" ? "bg-accent-muted text-accent" :
-                    user.role === "KITCHEN_STAFF" ? "bg-warning-muted text-warning" : 
-                    user.role === "RIDER" ? "bg-purple-500/10 text-purple-500" :
                     "bg-info-muted text-info"
                   )}>
                     {user.role === "OWNER" || user.role === "MANAGER" ? <ShieldAlert size={12} /> : <Briefcase size={12} />}

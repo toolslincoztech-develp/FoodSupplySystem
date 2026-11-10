@@ -30,7 +30,7 @@ export default function SuperAdminDashboard() {
 
   const handleDeleteRestaurant = async (restaurantId: string, restaurantName: string) => {
     const confirmation = window.prompt(
-      `⚠️ CRITICAL: You are about to permanently delete food supply "${restaurantName}" and all its branches, staff accounts, menus, tables, and orders.\n\nTo confirm, type the food supply name "${restaurantName}" below:`
+      `⚠️ CRITICAL: You are about to permanently delete food supply "${restaurantName}" and all its branches, staff accounts, menus, and orders.\n\nTo confirm, type the food supply name "${restaurantName}" below:`
     );
 
     if (confirmation !== restaurantName) {
@@ -349,8 +349,6 @@ export default function SuperAdminDashboard() {
                     <div className="flex gap-1 items-center flex-wrap">
                       {client.hasHR && <span title="HR Enabled" className="w-4 h-4 rounded-full bg-success/20 text-success flex items-center justify-center text-[8px] font-bold">HR</span>}
                       {client.hasInventory && <span title="Inventory Enabled" className="w-4 h-4 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[8px] font-bold">IV</span>}
-                      {client.hasKDS && <span title="KDS Enabled" className="w-4 h-4 rounded-full bg-warning/20 text-warning flex items-center justify-center text-[8px] font-bold">KD</span>}
-                      {client.hasDelivery && <span title="Delivery Enabled" className="w-4 h-4 rounded-full bg-info/20 text-info flex items-center justify-center text-[8px] font-bold">DL</span>}
                       {client.hasTax ? (
                         <span className="text-[9px] font-bold text-primary bg-primary-muted/20 px-1 py-0.5 rounded border border-primary/30">
                           TAX: {client.taxRate}%
@@ -428,9 +426,6 @@ export default function SuperAdminDashboard() {
               {[
                 { id: "hasHR", label: "HR & Staff Management" },
                 { id: "hasInventory", label: "Inventory & Stock" },
-                { id: "hasKDS", label: "Kitchen Display (KDS)" },
-                { id: "hasDelivery", label: "Delivery Module" },
-                { id: "hasTables", label: "Dine-in (Tables)" },
               ].map(feat => (
                 <div key={feat.id} className="flex items-center justify-between p-3 rounded-lg bg-surface-2 border border-border">
                   <span className="font-semibold text-sm">{feat.label}</span>
@@ -505,9 +500,6 @@ export default function SuperAdminDashboard() {
                   handleUpdateClient(editingFeatures.id, {
                     hasHR: Boolean(editingFeatures.hasHR),
                     hasInventory: Boolean(editingFeatures.hasInventory),
-                    hasKDS: Boolean(editingFeatures.hasKDS),
-                    hasDelivery: Boolean(editingFeatures.hasDelivery),
-                    hasTables: Boolean(editingFeatures.hasTables),
                     hasTax: Boolean(editingFeatures.hasTax),
                     taxRate: editingFeatures.hasTax ? Math.max(0, Number(editingFeatures.taxRate || 0)) : 0,
                   })

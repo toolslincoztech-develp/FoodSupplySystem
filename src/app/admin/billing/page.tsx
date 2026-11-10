@@ -128,7 +128,7 @@ export default function BillingPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={16} />
             <input
               type="text"
-              placeholder="Table or Order #"
+              placeholder="Search Order #"
               className="input pl-9 bg-surface-2 h-10 text-sm"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -154,10 +154,10 @@ export default function BillingPage() {
               >
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="font-bold text-primary">{order.table?.name || "T-N/A"}</span>
+                    <span className="font-bold text-primary">{order.orderNumber}</span>
                     <span className="text-[10px] bg-surface-3 px-1.5 py-0.5 rounded font-bold uppercase">{order.status}</span>
                   </div>
-                  <p className="text-xs font-semibold text-muted">{order.orderNumber} • {order.items.length} Items</p>
+                  <p className="text-xs font-semibold text-muted">{order.items.length} Items • {order.user?.name || "Staff"}</p>
                 </div>
                 <div className="text-right">
                   <p className="font-bold text-sm">{formatCurrency(order.total)}</p>
@@ -178,17 +178,17 @@ export default function BillingPage() {
             <div className="p-6 border-b border-border bg-surface flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                  <TableIcon size={24} />
+                  <Receipt size={24} />
                 </div>
                 <div>
-                  <h1 className="font-black text-2xl tracking-tight">Table {selectedOrder.table?.name || "N/A"}</h1>
+                  <h1 className="font-black text-2xl tracking-tight">{selectedOrder.orderNumber}</h1>
                   <p className="text-sm text-muted font-medium flex items-center gap-2">
-                    <User size={14} /> Server: {selectedOrder.user?.name || "Unknown"} • {selectedOrder.orderNumber}
+                    <User size={14} /> Cashier: {selectedOrder.user?.name || "Unknown"}
                   </p>
                 </div>
               </div>
               <button onClick={handlePrint} className="btn border border-border bg-surface hover:bg-surface-2 gap-2 text-sm font-bold">
-                <Printer size={18} /> Print KOT
+                <Printer size={18} /> Print Receipt
               </button>
             </div>
 

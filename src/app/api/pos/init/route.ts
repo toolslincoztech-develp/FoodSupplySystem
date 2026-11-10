@@ -24,37 +24,19 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "User is not assigned to a branch and no branch found" }, { status: 403 });
     }
 
-    // Execute all queries in parallel for maximum speed (<250ms)
-    const [tables, categories, menuItems, riders, activeOrders, restaurant] = await Promise.all([
-      // 1. Tables for the branch
-      prisma.restaurantTable.findMany({
-        where: { branchId },
-        orderBy: { name: "asc" }
-      }),
-      // 2. Categories for the restaurant
+    // Execute queries in parallel for maximum speed (<250ms)
+    const [categories, menuItems, activeOrders, restaurant] = await Promise.all([
+      // 1. Categories for the tenant
       prisma.category.findMany({
         where: { restaurantId: payload.restaurantId },
         orderBy: { sortOrder: "asc" }
       }),
-      // 3. Menu Items for the restaurant
+      // 2. Menu Items for the tenant
       prisma.menuItem.findMany({
         where: { restaurantId: payload.restaurantId },
         orderBy: { name: "asc" }
       }),
-      // 4. Delivery Riders for the restaurant
-      prisma.user.findMany({
-        where: { 
-          restaurantId: payload.restaurantId,
-          role: "RIDER"
-        },
-        select: {
-          id: true,
-          name: true,
-          phone: true
-        },
-        orderBy: { name: "asc" }
-      }),
-      // 5. Active orders for tables & drawer list
+      // 3. Active orders for drawer list
       prisma.order.findMany({
         where: {
           branchId,
@@ -62,13 +44,11 @@ export async function GET(req: Request) {
         },
         include: {
           items: { include: { menuItem: true } },
-          table: true,
-          rider: true,
           user: { select: { name: true } }
         },
         orderBy: { createdAt: "desc" }
       }),
-      // 6. Restaurant Tax Configuration
+      // 4. Tax Configuration
       prisma.$queryRaw<Array<{ hasTax: boolean; taxRate: number }>>`
         SELECT "hasTax", "taxRate" FROM "Restaurant" WHERE id = ${payload.restaurantId} LIMIT 1
       `
@@ -79,10 +59,8 @@ export async function GET(req: Request) {
     return NextResponse.json({
       success: true,
       data: {
-        tables,
         categories,
         menuItems,
-        riders,
         activeOrders,
         taxConfig: {
           hasTax: Boolean(taxInfo?.hasTax),

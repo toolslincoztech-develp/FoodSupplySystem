@@ -12,7 +12,7 @@ export async function GET(req: Request) {
     const payload = await verifyToken(token);
     if (!payload || !payload.restaurantId) return NextResponse.json({ error: "Invalid token" }, { status: 401 });
 
-    if (!["OWNER", "MANAGER", "ACCOUNTANT", "KITCHEN_STAFF", "SUPER_ADMIN"].includes(payload.role)) {
+    if (!["OWNER", "MANAGER", "ACCOUNTANT", "SUPER_ADMIN"].includes(payload.role)) {
       return NextResponse.json({ error: "Forbidden. Admin access required." }, { status: 403 });
     }
 

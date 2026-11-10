@@ -74,7 +74,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { tableId, orderType, items, total, tax, subtotal, discount, existingOrderId, riderId } = body;
+    const { orderType, items, total, tax, discount, existingOrderId } = body;
 
     if (!items || items.length === 0) {
       return NextResponse.json({ error: "Order must contain items" }, { status: 400 });
@@ -114,7 +114,7 @@ export async function POST(req: Request) {
       for (const item of items) {
         const incomingId = item.id || item.menuItemId;
         const incomingNotesClean = cleanItemNotes(item.notes);
-        let requestedQty = Number(item.quantity) || 1;
+        const requestedQty = Number(item.quantity) || 1;
         const itemPrice = Number(item.price) || 0;
 
         // Try exact match on menuItemId and cleanNotes
@@ -170,32 +170,13 @@ export async function POST(req: Request) {
           total,
           tax,
           discount: discount || 0,
-          // Only send to kitchen as PENDING if new additions exist; otherwise keep current status
           status: hasNewAdditions ? "PENDING" : existingOrder.status,
-          ...(riderId !== undefined ? { riderId: riderId || null } : {}),
           items: {
             create: finalItemsToCreate
           }
-        },
-        include: {
-          rider: { select: { id: true, name: true } }
         }
       });
       return NextResponse.json({ success: true, order: updatedOrder, hasNewAdditions });
-    }
-
-    // Check if table is already occupied (shouldn't happen if they clicked to update, but just in case)
-    if (tableId) {
-      const existingOrder = await prisma.order.findFirst({
-        where: {
-          tableId,
-          status: { in: ["PENDING", "PREPARING", "READY", "SERVED"] }
-        }
-      });
-
-      if (existingOrder) {
-        return NextResponse.json({ error: "Table is currently reserved. Please update the existing bill instead." }, { status: 400 });
-      }
     }
 
     // Generate Order Number for this branch
@@ -223,14 +204,12 @@ export async function POST(req: Request) {
     const order = await prisma.order.create({
       data: {
         orderNumber,
-        orderType,
+        orderType: orderType || "POS",
         total,
         tax,
         discount: discount || 0,
         branchId,
-        tableId: tableId || null,
-        userId: payload.id, // The Waiter who took the order
-        riderId: riderId || null,
+        userId: payload.id,
         status: "PENDING",
         items: {
           create: items.map((item: any) => ({
@@ -240,19 +219,8 @@ export async function POST(req: Request) {
             notes: item.notes || ""
           }))
         }
-      },
-      include: {
-        rider: { select: { id: true, name: true } }
       }
     });
-
-    // Update Table Status: Mark as RESERVED until settled
-    if (tableId) {
-      await prisma.restaurantTable.update({
-        where: { id: tableId },
-        data: { status: "RESERVED" }
-      });
-    }
 
     return NextResponse.json({
       success: true,

@@ -20,6 +20,193 @@ import {
 } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
 
+type SizeEntry = {
+  name: string;
+  price: string;
+};
+
+const createEmptySizeEntry = (): SizeEntry => ({ name: "", price: "" });
+
+function parseSizeEntries(rawSizes: unknown): SizeEntry[] {
+  if (!rawSizes) return [];
+  try {
+    const parsed = typeof rawSizes === "string" ? JSON.parse(rawSizes) : rawSizes;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
+    return Object.entries(parsed as Record<string, unknown>).map(([name, price]) => ({
+      name,
+      price: price !== undefined && price !== null ? String(price) : "",
+    }));
+  } catch {
+    return [];
+  }
+}
+
+function buildSizesPayload(
+  entries: SizeEntry[]
+): { payload: Record<string, number>; minPrice: number } | { error: string } {
+  if (entries.length === 0) {
+    return { error: "Please add at least one size option." };
+  }
+
+  const payload: Record<string, number> = {};
+  const seenLower = new Set<string>();
+
+  for (const entry of entries) {
+    const trimmedName = entry.name.trim();
+    if (!trimmedName) {
+      return { error: "Each size must have a name (e.g. Half, Full, 500g, 1kg)." };
+    }
+    const lower = trimmedName.toLowerCase();
+    if (seenLower.has(lower)) {
+      return { error: `Duplicate size name "${trimmedName}". Each size name must be unique.` };
+    }
+    seenLower.add(lower);
+
+    const parsedPrice = parseFloat(entry.price);
+    if (entry.price.trim() === "" || Number.isNaN(parsedPrice) || parsedPrice < 0) {
+      return { error: `Please enter a valid price for size "${trimmedName}".` };
+    }
+    payload[trimmedName] = parsedPrice;
+  }
+
+  const minPrice = Math.min(...Object.values(payload));
+  return { payload, minPrice };
+}
+
+function SizeOptionsEditor({
+  enabled,
+  onToggle,
+  entries,
+  onChange,
+  singlePrice,
+  onSinglePriceChange,
+}: {
+  enabled: boolean;
+  onToggle: (checked: boolean) => void;
+  entries: SizeEntry[];
+  onChange: (next: SizeEntry[]) => void;
+  singlePrice: string;
+  onSinglePriceChange: (value: string) => void;
+}) {
+  const handleEntryChange = (index: number, field: keyof SizeEntry, value: string) => {
+    const updated = entries.map((entry, idx) =>
+      idx === index ? { ...entry, [field]: value } : entry
+    );
+    onChange(updated);
+  };
+
+  const handleAddRow = () => {
+    onChange([...entries, createEmptySizeEntry()]);
+  };
+
+  const handleRemoveRow = (index: number) => {
+    if (entries.length <= 1) return;
+    onChange(entries.filter((_, idx) => idx !== index));
+  };
+
+  return (
+    <div className="p-4 bg-surface-2 rounded-xl border border-border space-y-3">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div>
+          <label className="font-bold text-sm text-foreground flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={enabled}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                onToggle(checked);
+                if (checked && entries.length === 0) {
+                  onChange([createEmptySizeEntry()]);
+                }
+              }}
+              className="w-4 h-4 rounded text-primary accent-primary cursor-pointer"
+            />
+            Multiple Sizes / Variants
+          </label>
+          <p className="text-xs text-muted mt-0.5">
+            Add custom sizes or pack options (e.g. Half, Full, 500g, 1kg, Large) with individual prices.
+          </p>
+        </div>
+        {enabled && (
+          <span className="text-xs font-bold text-primary px-2.5 py-1 bg-primary/10 rounded-full border border-primary/20">
+            {entries.length} {entries.length === 1 ? "Size" : "Sizes"} Active
+          </span>
+        )}
+      </div>
+
+      {enabled ? (
+        <div className="space-y-2.5 pt-3 border-t border-border">
+          {entries.map((entry, index) => (
+            <div key={index} className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-end">
+              <div className="flex-1">
+                <label className="block text-xs font-bold text-foreground mb-1">
+                  Size / Variant Name
+                </label>
+                <input
+                  type="text"
+                  required={enabled}
+                  value={entry.name}
+                  onChange={(e) => handleEntryChange(index, "name", e.target.value)}
+                  className="input bg-surface border-border w-full text-sm font-semibold"
+                  placeholder="e.g. Half, 500g, Regular, Large"
+                />
+              </div>
+              <div className="w-full sm:w-40">
+                <label className="block text-xs font-bold text-foreground mb-1">
+                  Price
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  required={enabled}
+                  value={entry.price}
+                  onChange={(e) => handleEntryChange(index, "price", e.target.value)}
+                  className="input bg-surface border-border w-full text-sm font-semibold"
+                  placeholder="e.g. 550"
+                />
+              </div>
+              <button
+                type="button"
+                disabled={entries.length <= 1}
+                onClick={() => handleRemoveRow(index)}
+                className="p-2.5 rounded-lg border border-border bg-surface text-muted hover:text-danger hover:bg-danger-muted/20 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer flex items-center justify-center"
+                title={entries.length <= 1 ? "At least one size is required" : "Remove size"}
+              >
+                <Trash2 size={15} />
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={handleAddRow}
+            className="btn btn-secondary text-xs font-bold px-3.5 py-2 border border-dashed border-primary/40 text-primary hover:bg-primary/5 cursor-pointer"
+          >
+            <Plus size={14} /> Add Another Size
+          </button>
+        </div>
+      ) : (
+        <div>
+          <label className="block text-xs font-bold text-foreground mb-1">Single Price</label>
+          <div className="relative max-w-xs">
+            <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={16} />
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              required={!enabled}
+              value={singlePrice}
+              onChange={(e) => onSinglePriceChange(e.target.value)}
+              className="input pl-10 bg-surface border-border w-full font-semibold"
+              placeholder="e.g. 450"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function InventoryPage() {
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,12 +229,7 @@ export default function InventoryPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [hasSizes, setHasSizes] = useState(false);
-  const [sizePrices, setSizePrices] = useState({
-    Small: "",
-    Medium: "",
-    Large: "",
-    XL: ""
-  });
+  const [sizeEntries, setSizeEntries] = useState<SizeEntry[]>([createEmptySizeEntry()]);
   const [submitting, setSubmitting] = useState(false);
 
   // Edit Item States
@@ -61,12 +243,7 @@ export default function InventoryPage() {
   const [editImageUrlInput, setEditImageUrlInput] = useState("");
   const [editProcessingImage, setEditProcessingImage] = useState(false);
   const [editHasSizes, setEditHasSizes] = useState(false);
-  const [editSizePrices, setEditSizePrices] = useState({
-    Small: "",
-    Medium: "",
-    Large: "",
-    XL: ""
-  });
+  const [editSizeEntries, setEditSizeEntries] = useState<SizeEntry[]>([createEmptySizeEntry()]);
   const [editIsAvailable, setEditIsAvailable] = useState(true);
   const editFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -141,45 +318,37 @@ export default function InventoryPage() {
     setEditImageInputMode("UPLOAD");
     setEditIsAvailable(item.isAvailable ?? true);
 
-    if (item.sizes) {
-      try {
-        const parsed = typeof item.sizes === "string" ? JSON.parse(item.sizes) : item.sizes;
-        if (parsed && typeof parsed === "object") {
-          setEditHasSizes(true);
-          setEditSizePrices({
-            Small: parsed.Small !== undefined ? String(parsed.Small) : "",
-            Medium: parsed.Medium !== undefined ? String(parsed.Medium) : "",
-            Large: parsed.Large !== undefined ? String(parsed.Large) : "",
-            XL: parsed.XL !== undefined ? String(parsed.XL) : ""
-          });
-          setEditPrice(String(item.price || ""));
-          return;
-        }
-      } catch (e) {}
+    const parsedEntries = parseSizeEntries(item.sizes);
+    if (parsedEntries.length > 0) {
+      setEditHasSizes(true);
+      setEditSizeEntries(parsedEntries);
+      setEditPrice(String(item.price || ""));
+      return;
     }
 
     setEditHasSizes(false);
-    setEditSizePrices({ Small: "", Medium: "", Large: "", XL: "" });
+    setEditSizeEntries([createEmptySizeEntry()]);
     setEditPrice(String(item.price || ""));
   };
 
   const handleSaveEditItem = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingItem) return;
-    setSubmitting(true);
 
-    let sizesPayload = null;
+    let sizesPayload: Record<string, number> | null = null;
     let finalPrice = editPrice;
 
     if (editHasSizes) {
-      sizesPayload = {
-        Small: parseFloat(editSizePrices.Small) || 0,
-        Medium: parseFloat(editSizePrices.Medium) || 0,
-        Large: parseFloat(editSizePrices.Large) || 0,
-        XL: parseFloat(editSizePrices.XL) || 0
-      };
-      finalPrice = editSizePrices.Small || editSizePrices.Medium || editPrice || "0";
+      const built = buildSizesPayload(editSizeEntries);
+      if ("error" in built) {
+        alert(built.error);
+        return;
+      }
+      sizesPayload = built.payload;
+      finalPrice = String(built.minPrice);
     }
+
+    setSubmitting(true);
 
     try {
       const res = await fetch("/api/admin/menu", {
@@ -281,20 +450,21 @@ export default function InventoryPage() {
 
   const handleAddItem = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitting(true);
 
-    let sizesPayload = null;
+    let sizesPayload: Record<string, number> | null = null;
     let finalPrice = itemPrice;
 
     if (hasSizes) {
-      sizesPayload = {
-        Small: parseFloat(sizePrices.Small) || 0,
-        Medium: parseFloat(sizePrices.Medium) || 0,
-        Large: parseFloat(sizePrices.Large) || 0,
-        XL: parseFloat(sizePrices.XL) || 0
-      };
-      finalPrice = sizePrices.Small || sizePrices.Medium || itemPrice || "0";
+      const built = buildSizesPayload(sizeEntries);
+      if ("error" in built) {
+        alert(built.error);
+        return;
+      }
+      sizesPayload = built.payload;
+      finalPrice = String(built.minPrice);
     }
+
+    setSubmitting(true);
 
     try {
       const res = await fetch("/api/admin/menu", {
@@ -317,9 +487,12 @@ export default function InventoryPage() {
         setItemImage("");
         setImageUrlInput("");
         setHasSizes(false);
-        setSizePrices({ Small: "", Medium: "", Large: "", XL: "" });
+        setSizeEntries([createEmptySizeEntry()]);
         setIsAddingItem(false);
         fetchMenu();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || "Failed to add item");
       }
     } catch (error) {
       alert("Error adding item");
@@ -370,7 +543,7 @@ export default function InventoryPage() {
           <h1 className="text-3xl font-bold tracking-tight mb-1 flex items-center gap-3">
             <Package className="text-primary" /> Menu & Inventory
           </h1>
-          <p className="text-muted">Manage your categories, items, and pizza size options (S, M, L, XL).</p>
+          <p className="text-muted">Manage your categories, items, and custom size or pack options.</p>
         </div>
         <div className="flex gap-3">
           <button onClick={() => setIsAddingCategory(!isAddingCategory)} className="btn btn-secondary border border-border">
@@ -413,95 +586,15 @@ export default function InventoryPage() {
             </div>
 
             {/* Size Options Toggle & Price Configuration */}
-            <div className="md:col-span-2 p-4 bg-surface-2 rounded-xl border border-border space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <label className="font-bold text-sm text-foreground flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={hasSizes}
-                      onChange={e => setHasSizes(e.target.checked)}
-                      className="w-4 h-4 rounded text-primary accent-primary"
-                    />
-                    Multiple Pizza Sizes (Small, Medium, Large, XL)
-                  </label>
-                  <p className="text-xs text-muted mt-0.5">Check this to specify individual prices for Small, Medium, Large, and Extra Large.</p>
-                </div>
-                {hasSizes && (
-                  <span className="text-xs font-bold text-primary px-2.5 py-1 bg-primary/10 rounded-full border border-primary/20">
-                    4 Sizes Active
-                  </span>
-                )}
-              </div>
-
-              {hasSizes ? (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-border">
-                  <div>
-                    <label className="block text-xs font-bold text-foreground mb-1">Small (S) Price</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      required={hasSizes}
-                      value={sizePrices.Small}
-                      onChange={e => setSizePrices({ ...sizePrices, Small: e.target.value })}
-                      className="input bg-surface border-border w-full text-sm font-semibold"
-                      placeholder="e.g. 550"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-foreground mb-1">Medium (M) Price</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      required={hasSizes}
-                      value={sizePrices.Medium}
-                      onChange={e => setSizePrices({ ...sizePrices, Medium: e.target.value })}
-                      className="input bg-surface border-border w-full text-sm font-semibold"
-                      placeholder="e.g. 950"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-foreground mb-1">Large (L) Price</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      required={hasSizes}
-                      value={sizePrices.Large}
-                      onChange={e => setSizePrices({ ...sizePrices, Large: e.target.value })}
-                      className="input bg-surface border-border w-full text-sm font-semibold"
-                      placeholder="e.g. 1450"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-foreground mb-1">Extra Large (XL) Price</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      required={hasSizes}
-                      value={sizePrices.XL}
-                      onChange={e => setSizePrices({ ...sizePrices, XL: e.target.value })}
-                      className="input bg-surface border-border w-full text-sm font-semibold"
-                      placeholder="e.g. 1950"
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <label className="block text-xs font-bold text-foreground mb-1">Single Price</label>
-                  <div className="relative max-w-xs">
-                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={16} />
-                    <input 
-                      type="number" 
-                      step="0.01" 
-                      required={!hasSizes} 
-                      value={itemPrice} 
-                      onChange={e => setItemPrice(e.target.value)} 
-                      className="input pl-10 bg-surface border-border w-full font-semibold" 
-                      placeholder="e.g. 450" 
-                    />
-                  </div>
-                </div>
-              )}
+            <div className="md:col-span-2">
+              <SizeOptionsEditor
+                enabled={hasSizes}
+                onToggle={setHasSizes}
+                entries={sizeEntries}
+                onChange={setSizeEntries}
+                singlePrice={itemPrice}
+                onSinglePriceChange={setItemPrice}
+              />
             </div>
 
             {/* Dish Picture Section */}
@@ -840,96 +933,14 @@ export default function InventoryPage() {
                 </div>
 
                 {/* Size Options Toggle & Price Configuration */}
-                <div className="p-4 bg-surface-2 rounded-xl border border-border space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <label className="font-bold text-sm text-foreground flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={editHasSizes}
-                          onChange={e => setEditHasSizes(e.target.checked)}
-                          className="w-4 h-4 rounded text-primary accent-primary cursor-pointer"
-                        />
-                        Multiple Pizza Sizes (Small, Medium, Large, XL)
-                      </label>
-                      <p className="text-xs text-muted mt-0.5">Toggle this to specify individual prices for Small, Medium, Large, and Extra Large.</p>
-                    </div>
-                    {editHasSizes && (
-                      <span className="text-xs font-bold text-primary px-2.5 py-1 bg-primary/10 rounded-full border border-primary/20">
-                        4 Sizes Active
-                      </span>
-                    )}
-                  </div>
-
-                  {editHasSizes ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-border">
-                      <div>
-                        <label className="block text-xs font-bold text-foreground mb-1">Small (S)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          required={editHasSizes}
-                          value={editSizePrices.Small}
-                          onChange={e => setEditSizePrices({ ...editSizePrices, Small: e.target.value })}
-                          className="input bg-surface border-border w-full text-sm font-semibold"
-                          placeholder="e.g. 550"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-foreground mb-1">Medium (M)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          required={editHasSizes}
-                          value={editSizePrices.Medium}
-                          onChange={e => setEditSizePrices({ ...editSizePrices, Medium: e.target.value })}
-                          className="input bg-surface border-border w-full text-sm font-semibold"
-                          placeholder="e.g. 950"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-foreground mb-1">Large (L)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          required={editHasSizes}
-                          value={editSizePrices.Large}
-                          onChange={e => setEditSizePrices({ ...editSizePrices, Large: e.target.value })}
-                          className="input bg-surface border-border w-full text-sm font-semibold"
-                          placeholder="e.g. 1450"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-foreground mb-1">XL (Extra Large)</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          required={editHasSizes}
-                          value={editSizePrices.XL}
-                          onChange={e => setEditSizePrices({ ...editSizePrices, XL: e.target.value })}
-                          className="input bg-surface border-border w-full text-sm font-semibold"
-                          placeholder="e.g. 1950"
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <label className="block text-xs font-bold text-foreground mb-1">Single Price</label>
-                      <div className="relative max-w-xs">
-                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" size={16} />
-                        <input
-                          type="number"
-                          step="0.01"
-                          required={!editHasSizes}
-                          value={editPrice}
-                          onChange={e => setEditPrice(e.target.value)}
-                          className="input pl-10 bg-surface border-border w-full font-semibold"
-                          placeholder="e.g. 450"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <SizeOptionsEditor
+                  enabled={editHasSizes}
+                  onToggle={setEditHasSizes}
+                  entries={editSizeEntries}
+                  onChange={setEditSizeEntries}
+                  singlePrice={editPrice}
+                  onSinglePriceChange={setEditPrice}
+                />
 
                 {/* Dish Picture Section */}
                 <div className="p-4 bg-surface-2 rounded-xl border border-border space-y-3">

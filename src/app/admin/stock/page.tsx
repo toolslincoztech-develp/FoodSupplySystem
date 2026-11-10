@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Package, Plus, AlertTriangle, ChefHat, ArrowRight } from "lucide-react";
+import { Package, Plus, AlertTriangle, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function StockManagementPage() {
@@ -72,7 +72,7 @@ export default function StockManagementPage() {
         setShowIssue(null);
         setIssueQty("");
         fetchStock();
-        alert("Stock issued to kitchen successfully!");
+        alert("Stock issued successfully!");
       } else {
         alert("Insufficient stock in store");
       }
@@ -90,9 +90,9 @@ export default function StockManagementPage() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold tracking-tight mb-1 flex items-center gap-3">
-            <Package className="text-primary w-8 h-8" /> Store & Kitchen Stock
+            <Package className="text-primary w-8 h-8" /> Store &amp; Inventory Stock
           </h1>
-          <p className="text-muted">Manage raw materials, low stock alerts, and issue items to the kitchen.</p>
+          <p className="text-muted">Manage raw materials, low stock alerts, and stock deductions.</p>
         </div>
         <button onClick={() => setShowAdd(!showAdd)} className="btn btn-primary">
           {showAdd ? "Cancel" : <><Plus size={18} className="mr-2" /> Add New Material</>}
@@ -134,7 +134,7 @@ export default function StockManagementPage() {
               <th className="p-4 font-semibold">Material Name</th>
               <th className="p-4 font-semibold">Store Stock</th>
               <th className="p-4 font-semibold">Status</th>
-              <th className="p-4 font-semibold text-right">Kitchen Issue</th>
+              <th className="p-4 font-semibold text-right">Issue Stock</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -167,7 +167,7 @@ export default function StockManagementPage() {
                     </form>
                   ) : (
                     <button onClick={() => setShowIssue(item.id)} className="btn btn-secondary px-3 py-1.5 text-xs inline-flex items-center gap-1 border border-border">
-                      Issue to Kitchen <ArrowRight size={14} /> <ChefHat size={14} className="text-warning ml-1" />
+                      Issue Stock <ArrowRight size={14} />
                     </button>
                   )}
                 </td>

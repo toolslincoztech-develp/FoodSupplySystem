@@ -231,8 +231,8 @@ export default function FinancePage() {
             </div>
           </div>
 
-          {/* Breakdown Section: Payment Methods & Order Channels */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Breakdown Section: Payment Methods */}
+          <div className="grid grid-cols-1 gap-6">
             {/* Payment Methods Card */}
             <div className="glass-card p-6 flex flex-col justify-between">
               <div>
@@ -296,72 +296,7 @@ export default function FinancePage() {
 
               <div className="mt-6 pt-4 border-t border-border flex items-center justify-between text-xs text-muted">
                 <span>Total Settled: {summary?.totalTransactions || 0} bills</span>
-                <span className="font-semibold text-foreground">Net: {formatCurrency(summary?.grossRevenue || 0)}</span>
-              </div>
-            </div>
-
-            {/* Sales Channel Card */}
-            <div className="glass-card p-6 flex flex-col justify-between">
-              <div>
-                <h2 className="text-lg font-bold mb-1 flex items-center gap-2">
-                  <UtensilsCrossed size={18} className="text-accent" /> Revenue by Sales Channel
-                </h2>
-                <p className="text-xs text-muted mb-6">Performance across Dine-in, Takeaway, and Delivery</p>
-
-                <div className="space-y-4">
-                  {/* Dine In */}
-                  <div>
-                    <div className="flex justify-between items-center text-sm font-semibold mb-1.5">
-                      <span className="flex items-center gap-2 text-foreground">
-                        <UtensilsCrossed size={16} className="text-accent" /> Dine-In ({orderTypes?.dineIn?.count || 0})
-                      </span>
-                      <span className="font-bold text-foreground">{formatCurrency(orderTypes?.dineIn?.revenue || 0)}</span>
-                    </div>
-                    <div className="w-full h-2.5 bg-surface-3 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-accent rounded-full transition-all duration-500" 
-                        style={{ width: `${summary?.grossRevenue ? ((orderTypes?.dineIn?.revenue || 0) / summary.grossRevenue) * 100 : 0}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Takeaway */}
-                  <div>
-                    <div className="flex justify-between items-center text-sm font-semibold mb-1.5">
-                      <span className="flex items-center gap-2 text-foreground">
-                        <ShoppingBag size={16} className="text-warning" /> Takeaway ({orderTypes?.takeaway?.count || 0})
-                      </span>
-                      <span className="font-bold text-foreground">{formatCurrency(orderTypes?.takeaway?.revenue || 0)}</span>
-                    </div>
-                    <div className="w-full h-2.5 bg-surface-3 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-warning rounded-full transition-all duration-500" 
-                        style={{ width: `${summary?.grossRevenue ? ((orderTypes?.takeaway?.revenue || 0) / summary.grossRevenue) * 100 : 0}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Delivery */}
-                  <div>
-                    <div className="flex justify-between items-center text-sm font-semibold mb-1.5">
-                      <span className="flex items-center gap-2 text-foreground">
-                        <Bike size={16} className="text-primary" /> Delivery ({orderTypes?.delivery?.count || 0})
-                      </span>
-                      <span className="font-bold text-foreground">{formatCurrency(orderTypes?.delivery?.revenue || 0)}</span>
-                    </div>
-                    <div className="w-full h-2.5 bg-surface-3 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-primary rounded-full transition-all duration-500" 
-                        style={{ width: `${summary?.grossRevenue ? ((orderTypes?.delivery?.revenue || 0) / summary.grossRevenue) * 100 : 0}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6 pt-4 border-t border-border flex items-center justify-between text-xs text-muted">
-                <span>Discounts Applied: {formatCurrency(summary?.totalDiscount || 0)}</span>
-                <span className="font-semibold text-foreground">Tax: {formatCurrency(summary?.totalTax || 0)}</span>
+                <span className="font-semibold text-foreground">Discounts: {formatCurrency(summary?.totalDiscount || 0)} • Tax: {formatCurrency(summary?.totalTax || 0)} • Net: {formatCurrency(summary?.grossRevenue || 0)}</span>
               </div>
             </div>
           </div>
@@ -380,7 +315,7 @@ export default function FinancePage() {
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
                 <input 
                   type="text"
-                  placeholder="Search order or server..."
+                  placeholder="Search order or staff..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   className="input pl-9 py-2 text-xs w-full bg-surface-2"
@@ -394,8 +329,7 @@ export default function FinancePage() {
                   <tr className="bg-surface-2 border-b border-border text-xs uppercase tracking-wider text-muted font-bold">
                     <th className="py-3.5 px-6">Order #</th>
                     <th className="py-3.5 px-4">Date & Time</th>
-                    <th className="py-3.5 px-4">Channel</th>
-                    <th className="py-3.5 px-4">Server</th>
+                    <th className="py-3.5 px-4">Staff</th>
                     <th className="py-3.5 px-4">Method</th>
                     <th className="py-3.5 px-4 text-right">Tax</th>
                     <th className="py-3.5 px-6 text-right">Amount</th>
@@ -407,22 +341,9 @@ export default function FinancePage() {
                       <tr key={tx.id} className="hover:bg-surface-2/60 transition-colors">
                         <td className="py-3.5 px-6 font-bold text-foreground">
                           {tx.orderNumber}
-                          {tx.tableName && (
-                            <span className="ml-2 text-[11px] font-normal text-muted">({tx.tableName})</span>
-                          )}
                         </td>
                         <td className="py-3.5 px-4 text-xs text-muted">
                           {new Date(tx.date).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                        </td>
-                        <td className="py-3.5 px-4">
-                          <span className={cn(
-                            "text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider",
-                            tx.orderType === "DINE_IN" ? "bg-accent/10 text-accent" :
-                            tx.orderType === "TAKEAWAY" ? "bg-warning/10 text-warning" :
-                            "bg-primary/10 text-primary"
-                          )}>
-                            {tx.orderType.replace("_", " ")}
-                          </span>
                         </td>
                         <td className="py-3.5 px-4 text-xs text-muted font-medium">
                           {tx.serverName}
@@ -446,7 +367,7 @@ export default function FinancePage() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={7} className="py-12 text-center text-muted">
+                      <td colSpan={6} className="py-12 text-center text-muted">
                         <Receipt size={36} className="mx-auto mb-2 opacity-30" />
                         <p className="font-semibold text-sm">No transactions found for this period.</p>
                       </td>
