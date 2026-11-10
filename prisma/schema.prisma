@@ -1,0 +1,255 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ==========================================
+// SAAS TENANT MODELS
+// ==========================================
+
+model Restaurant {
+  id               String   @id @default(cuid())
+  name             String
+  slug             String   @unique // Used for subdomains or login/identification
+  contactEmail     String
+  contactPhone     String
+  licenseKey       String   @unique
+  subscriptionPlan String   @default("YEARLY") // MONTHLY, YEARLY, LIFETIME
+  status           String   @default("ACTIVE") // ACTIVE, EXPIRED, SUSPENDED
+  validUntil       DateTime
+  logoUrl          String?
+  
+  // Feature Toggles (Controlled by SuperAdmin)
+  hasHR            Boolean  @default(true)
+  hasInventory     Boolean  @default(true)
+  hasKDS           Boolean  @default(true)
+  hasDelivery      Boolean  @default(true)
+  hasTables        Boolean  @default(true)
+  hasTax           Boolean  @default(false)
+  taxRate          Float    @default(0) // Tax percentage (e.g. 16 for 16%)
+
+  createdAt        DateTime @default(now())
+
+  branches         Branch[]
+  users            User[]
+  categories       Category[]
+  menuItems        MenuItem[]
+  expenseCategories ExpenseCategory[]
+  expenses         Expense[]
+}
+
+model Branch {
+  id           String   @id @default(cuid())
+  name         String
+  address      String?
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  tables       RestaurantTable[]
+  orders       Order[]
+  inventory    InventoryItem[]
+  users        User[]     // Users assigned to specific branches
+  expenses     Expense[]
+
+  @@index([restaurantId])
+}
+
+// ==========================================
+// EXISTING ERP MODELS (NOW SCOPED TO TENANTS)
+// ==========================================
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  password     String
+  role         String   @default("WAITER") // SUPER_ADMIN, OWNER, MANAGER, CASHIER, WAITER, KITCHEN_STAFF, RIDER
+  phone        String?
+  createdAt    DateTime @default(now())
+  
+  restaurantId String?  // Nullable ONLY for SuperAdmin
+  restaurant   Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  branchId     String?  // Nullable for Owners who manage all branches
+  branch       Branch?  @relation(fields: [branchId], references: [id])
+  
+  orders       Order[]  @relation("OrderCreator")
+  deliveries   Order[]  @relation("OrderRider")
+  expenses     Expense[]
+
+  @@index([restaurantId])
+  @@index([branchId])
+  @@index([role])
+}
+
+model RestaurantTable {
+  id        String   @id @default(cuid())
+  name      String   // e.g., "T-1", "V-1"
+  capacity  Int
+  status    String   @default("AVAILABLE") // AVAILABLE, OCCUPIED, RESERVED
+  floor     String   @default("MAIN")
+  
+  branchId  String
+  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  orders    Order[]
+
+  @@index([branchId])
+  @@index([status])
+}
+
+model Category {
+  id           String   @id @default(cuid())
+  name         String
+  icon         String?
+  sortOrder    Int      @default(0)
+  
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  items        MenuItem[]
+
+  @@index([restaurantId])
+}
+
+model MenuItem {
+  id           String   @id @default(cuid())
+  name         String
+  price        Float
+  description  String?
+  image        String?
+  sizes        String?  // JSON string storing e.g. {"Small": 600, "Medium": 1100, "Large": 1600, "XL": 2100}
+  isAvailable  Boolean  @default(true)
+  
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  categoryId   String
+  category     Category @relation(fields: [categoryId], references: [id])
+  
+  orderItems   OrderItem[]
+
+  @@index([restaurantId])
+  @@index([categoryId])
+  @@index([isAvailable])
+}
+
+model Order {
+  id          String   @id @default(cuid())
+  orderNumber String   // Format: #ORD-1234
+  status      String   @default("PENDING") // PENDING, PREPARING, READY, SERVED, COMPLETED, CANCELLED
+  orderType   String   @default("DINE_IN") // DINE_IN, TAKEAWAY, DELIVERY
+  total       Float    @default(0)
+  tax         Float    @default(0)
+  discount    Float    @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  branchId    String
+  branch      Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  tableId     String?
+  table       RestaurantTable? @relation(fields: [tableId], references: [id])
+  userId      String?
+  user        User?    @relation("OrderCreator", fields: [userId], references: [id])
+  riderId     String?
+  rider       User?    @relation("OrderRider", fields: [riderId], references: [id])
+  
+  items       OrderItem[]
+  payment     Payment?
+
+  @@unique([branchId, orderNumber])
+  @@index([branchId])
+  @@index([branchId, status])
+  @@index([branchId, createdAt])
+  @@index([status])
+  @@index([createdAt])
+  @@index([tableId])
+  @@index([userId])
+  @@index([riderId])
+}
+
+model OrderItem {
+  id         String   @id @default(cuid())
+  quantity   Int
+  price      Float
+  notes      String?
+  
+  orderId    String
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+
+  @@index([orderId])
+  @@index([menuItemId])
+}
+
+model Payment {
+  id            String   @id @default(cuid())
+  amount        Float
+  method        String   @default("CASH") // CASH, CARD, SPLIT
+  status        String   @default("PAID") // PENDING, PAID, REFUNDED
+  createdAt     DateTime @default(now())
+  
+  orderId       String   @unique
+  order         Order    @relation(fields: [orderId], references: [id])
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model InventoryItem {
+  id          String   @id @default(cuid())
+  name        String
+  quantity    Float
+  unit        String   // kg, liter, pieces
+  minStock    Float    @default(0)
+  
+  branchId    String
+  branch      Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@index([branchId])
+}
+
+model ExpenseCategory {
+  id           String     @id @default(cuid())
+  name         String
+  description  String?
+  createdAt    DateTime   @default(now())
+
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  
+  expenses     Expense[]
+
+  @@unique([restaurantId, name])
+  @@index([restaurantId])
+}
+
+model Expense {
+  id            String           @id @default(cuid())
+  title         String
+  amount        Float
+  category      String
+  categoryId    String?
+  categoryRel   ExpenseCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  paymentMethod String           @default("CASH") // CASH, BANK, CARD
+  notes         String?
+  date          DateTime         @default(now())
+  createdAt     DateTime         @default(now())
+  
+  restaurantId  String
+  restaurant    Restaurant       @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  branchId      String
+  branch        Branch           @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  userId        String?
+  user          User?            @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([restaurantId])
+  @@index([branchId])
+  @@index([date])
+  @@index([paymentMethod])
+  @@index([categoryId])
+}
