@@ -60,7 +60,7 @@ export function generateReceiptHtml(order: any, options?: ReceiptPrintOptions): 
   const paymentDisplay = options?.paymentStatus || (order.payment?.status === "PAID" ? "PAID" : order.payment?.method || (order.status === "COMPLETED" ? "PAID" : "PAID"));
 
   // Cashier
-  const cashierDisplay = options?.cashierName || order.user?.name || "Josan Foods";
+  const cashierDisplay = options?.cashierName || order.user?.name || "Demo Foods";
 
   // Items table rows
   const items = order.items || [];
