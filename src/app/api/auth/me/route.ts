@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { verifyToken, signToken } from "@/lib/auth";
 import { cookies } from "next/headers";
 import bcrypt from "bcryptjs";
-import { getOrSetCache, invalidateTenantCache, tenantCacheKey } from "@/lib/cache";
+import { getOrSetCache, invalidateSuperAdminCache, invalidateTenantCache, tenantCacheKey } from "@/lib/cache";
 
 export async function GET() {
   try {
@@ -28,6 +28,8 @@ export async function GET() {
             restaurant: {
               select: {
                 name: true,
+                contactPhone: true,
+                address: true,
                 logoUrl: true,
                 status: true,
                 validUntil: true,
@@ -64,6 +66,8 @@ export async function GET() {
         role: user.role,
         restaurant: user.restaurant ? {
           name: user.restaurant.name,
+          contactPhone: user.restaurant.contactPhone,
+          address: user.restaurant.address,
           logoUrl: user.restaurant.logoUrl,
           hasHR: user.restaurant.hasHR,
           hasInventory: user.restaurant.hasInventory,
@@ -89,7 +93,7 @@ export async function PUT(req: Request) {
     if (!payload || !payload.id) return NextResponse.json({ error: "Invalid token" }, { status: 401 });
 
     const body = await req.json();
-    const { name, email, currentPassword, newPassword } = body;
+    const { name, email, currentPassword, newPassword, business } = body;
 
     const user = await prisma.user.findUnique({
       where: { id: payload.id }
@@ -135,32 +139,76 @@ export async function PUT(req: Request) {
       updateData.password = await bcrypt.hash(trimmedNewPass, 10);
     }
 
-    if (Object.keys(updateData).length === 0) {
+    const businessUpdateData: Record<string, any> = {};
+    if (business && typeof business === "object" && user.restaurantId) {
+      if (!["OWNER", "MANAGER", "SUPER_ADMIN"].includes(user.role)) {
+        return NextResponse.json({ error: "Forbidden. Only business admins can update receipt branding." }, { status: 403 });
+      }
+      if (business.name !== undefined) {
+        const bName = String(business.name).trim();
+        if (!bName) {
+          return NextResponse.json({ error: "Business name cannot be empty" }, { status: 400 });
+        }
+        businessUpdateData.name = bName;
+      }
+      if (business.phone !== undefined) {
+        businessUpdateData.contactPhone = String(business.phone).trim();
+      }
+      if (business.address !== undefined) {
+        const bAddr = String(business.address).trim();
+        businessUpdateData.address = bAddr || null;
+      }
+      if (business.logoUrl !== undefined) {
+        const bLogo = typeof business.logoUrl === "string" ? business.logoUrl.trim() : "";
+        businessUpdateData.logoUrl = bLogo || null;
+      }
+    }
+
+    if (user.role === "OWNER" && updateData.email && user.restaurantId) {
+      businessUpdateData.contactEmail = updateData.email;
+    }
+
+    if (Object.keys(updateData).length === 0 && Object.keys(businessUpdateData).length === 0) {
       return NextResponse.json({ error: "No changes provided" }, { status: 400 });
     }
 
-    const updatedUser = await prisma.user.update({
-      where: { id: user.id },
-      data: updateData,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        role: true
-      }
-    });
+    const updatedUser = Object.keys(updateData).length > 0
+      ? await prisma.user.update({
+          where: { id: user.id },
+          data: updateData,
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            phone: true,
+            role: true
+          }
+        })
+      : {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+          role: user.role
+        };
 
-    // If owner changed email, update restaurant contact email
-    if (user.role === "OWNER" && updateData.email && user.restaurantId) {
+    if (user.restaurantId && Object.keys(businessUpdateData).length > 0) {
       await prisma.restaurant.update({
         where: { id: user.restaurantId },
-        data: { contactEmail: updateData.email }
+        data: businessUpdateData
       });
     }
 
     if (user.restaurantId) {
-      invalidateTenantCache(user.restaurantId, ["auth"]);
+      invalidateTenantCache(user.restaurantId, [
+        "auth",
+        "pos-init",
+        "orders",
+        "closing"
+      ]);
+      if (Object.keys(businessUpdateData).length > 0) {
+        invalidateSuperAdminCache();
+      }
     }
 
     // Refresh JWT session cookie with new info

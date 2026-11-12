@@ -8,7 +8,12 @@ function escapeHtml(str: string): string {
     .replace(/'/g, "&#039;");
 }
 
-import { LOGO_DATA_URI } from "./logoData";
+export interface BusinessReceiptInfo {
+  name?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  logoUrl?: string | null;
+}
 
 export interface ReceiptPrintOptions {
   paymentStatus?: "PAID" | "UNPAID" | string;
@@ -19,13 +24,21 @@ export interface ReceiptPrintOptions {
   addressLine1?: string;
   addressLine2?: string;
   whatsapp?: string;
+  businessInfo?: BusinessReceiptInfo | null;
   win?: Window | null;
 }
 
 export function generateReceiptHtml(order: any, options?: ReceiptPrintOptions): string {
-  const logoSrc = LOGO_DATA_URI;
+  const logoSrc =
+    options?.businessInfo?.logoUrl ||
+    order.restaurant?.logoUrl ||
+    "";
 
-  const restaurantName = options?.restaurantName || order.restaurant?.name || "FOOD SUPPLY";
+  const restaurantName =
+    options?.restaurantName ||
+    options?.businessInfo?.name ||
+    order.restaurant?.name ||
+    "FOOD SUPPLY";
   const receiptType = options?.receiptType || "CASH RECEIPT";
 
   // Clean order number matching sample format (e.g., "12" or "1012")
@@ -60,7 +73,7 @@ export function generateReceiptHtml(order: any, options?: ReceiptPrintOptions): 
   const paymentDisplay = options?.paymentStatus || (order.payment?.status === "PAID" ? "PAID" : order.payment?.method || (order.status === "COMPLETED" ? "PAID" : "PAID"));
 
   // Cashier
-  const cashierDisplay = options?.cashierName || order.user?.name || "Demo Foods";
+  const cashierDisplay = options?.cashierName || order.user?.name || "Cashier";
 
   // Items table rows
   const items = order.items || [];
@@ -188,10 +201,33 @@ export function generateReceiptHtml(order: any, options?: ReceiptPrintOptions): 
     ? `<div>Address: ${customerAddress}</div>`
     : "";
 
-  // Restaurant contact info
-  const addressLine1 = options?.addressLine1 || "Gulberg Branch";
+  // Business contact info
+  const addressLine1 =
+    options?.addressLine1 ||
+    options?.businessInfo?.address ||
+    order.restaurant?.address ||
+    "";
   const addressLine2 = options?.addressLine2 || "";
-  const whatsappNumber = options?.whatsapp || "0304 8881219";
+  const fullAddress = [addressLine1, addressLine2].filter(Boolean).join(", ");
+  const contactNumber =
+    options?.whatsapp ||
+    options?.businessInfo?.phone ||
+    order.restaurant?.contactPhone ||
+    "";
+
+  const footerContactParts = [
+    fullAddress ? `Address: ${escapeHtml(fullAddress)}` : "",
+    contactNumber ? `Phone: ${escapeHtml(contactNumber)}` : "",
+  ].filter(Boolean);
+
+  const footerContactHtml =
+    footerContactParts.length > 0
+      ? `<div class="center footer-contact"><div>${footerContactParts.join(" | ")}</div></div>`
+      : "";
+
+  const logoHtml = logoSrc
+    ? `<div class="logo-container"><img src="${escapeHtml(logoSrc)}" alt="Logo" class="logo-img" /></div>`
+    : "";
 
   return `<!DOCTYPE html>
 <html>
@@ -326,7 +362,7 @@ export function generateReceiptHtml(order: any, options?: ReceiptPrintOptions): 
         line-height: 1.35;
         margin: 6px 0 12px 0;
         width: 100%;
-        white-space: nowrap;
+        word-break: break-word;
       }
       .footer-bottom {
         font-size: 12.5px;
@@ -362,18 +398,16 @@ export function generateReceiptHtml(order: any, options?: ReceiptPrintOptions): 
   <body>
     <div class="receipt-container">
       <!-- Top Logo -->
-      <div class="logo-container">
-        <img src="${logoSrc}" alt="Logo" class="logo-img" />
-      </div>
+      ${logoHtml}
 
       <!-- Header info centered -->
-      <div class="center restaurant-name">${restaurantName}</div>
-      <div class="center receipt-type">${receiptType}</div>
+      <div class="center restaurant-name">${escapeHtml(restaurantName)}</div>
+      <div class="center receipt-type">${escapeHtml(receiptType)}</div>
       <div class="center header-meta">
-        <div>Date: ${formattedDate}</div>
-        <div>Order #: ${orderNumDisplay}</div>
-        <div>Payment: ${paymentDisplay}</div>
-        <div>Cashier: ${cashierDisplay}</div>
+        <div>Date: ${escapeHtml(formattedDate)}</div>
+        <div>Order #: ${escapeHtml(orderNumDisplay)}</div>
+        <div>Payment: ${escapeHtml(paymentDisplay)}</div>
+        <div>Cashier: ${escapeHtml(cashierDisplay)}</div>
       </div>
 
       <div class="dashed-line"></div>
@@ -422,10 +456,8 @@ export function generateReceiptHtml(order: any, options?: ReceiptPrintOptions): 
 
       <div class="dashed-line"></div>
 
-      <!-- Restaurant Footer Address & WhatsApp -->
-      <div class="center footer-contact">
-        <div>Address: ${addressLine1}${addressLine2 ? `, ${addressLine2}` : ""} | WhatsApp: ${whatsappNumber}</div>
-      </div>
+      <!-- Business Footer Address & Phone -->
+      ${footerContactHtml}
 
       <!-- Thank you & Powered by -->
       <div class="center">
@@ -487,8 +519,10 @@ export function printReceipt(order: any, options?: ReceiptPrintOptions) {
 }
 
 export function generateClosingReportHtml(data: any): string {
-  const logoSrc = LOGO_DATA_URI;
+  const logoSrc = data.restaurant?.logoUrl || "";
   const restaurantName = data.restaurant?.name || "FOOD SUPPLY ERP";
+  const restaurantAddress = data.restaurant?.address || "";
+  const restaurantPhone = data.restaurant?.phone || "";
   const cashierName = data.cashier?.name || "Cashier";
   const dateStr = data.date ? new Date(data.date).toLocaleString("en-US", {
     month: "2-digit",
@@ -563,14 +597,13 @@ export function generateClosingReportHtml(data: any): string {
   </style>
 </head>
 <body>
-  <div class="logo-container">
-    <img src="${logoSrc}" alt="Logo" class="logo-img" />
-  </div>
-  <div class="center restaurant-name">${restaurantName}</div>
+  ${logoSrc ? `<div class="logo-container"><img src="${escapeHtml(logoSrc)}" alt="Logo" class="logo-img" /></div>` : ""}
+  <div class="center restaurant-name">${escapeHtml(restaurantName)}</div>
+  ${(restaurantAddress || restaurantPhone) ? `<div class="center meta-text" style="margin-bottom: 4px;">${[restaurantAddress, restaurantPhone].filter(Boolean).map(escapeHtml).join(" | ")}</div>` : ""}
   <div class="center report-title">Daily Closing Report</div>
   <div class="center meta-text">
-    <div><strong>Date:</strong> ${dateStr}</div>
-    <div><strong>Cashier:</strong> ${cashierName}</div>
+    <div><strong>Date:</strong> ${escapeHtml(dateStr)}</div>
+    <div><strong>Cashier:</strong> ${escapeHtml(cashierName)}</div>
     <div><strong>Shift Status:</strong> CLOSED</div>
   </div>
 

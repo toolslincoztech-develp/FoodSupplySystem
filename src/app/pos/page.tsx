@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { cn, formatCurrency, stripEmojis } from "@/lib/utils";
 import { useCartStore } from "@/stores/useCartStore";
-import { printReceipt, printClosingReport } from "@/lib/receipt";
+import { printReceipt, printClosingReport, BusinessReceiptInfo } from "@/lib/receipt";
 
 export default function POSPage() {
   const [activeCategory, setActiveCategory] = useState<string>("ALL");
@@ -43,6 +43,7 @@ export default function POSPage() {
   const [categories, setCategories] = useState<any[]>([]);
   const [menuItems, setMenuItems] = useState<any[]>([]);
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
+  const [businessInfo, setBusinessInfo] = useState<BusinessReceiptInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -84,6 +85,9 @@ export default function POSPage() {
         setMenuItems(data.menuItems || []);
         if (data.activeOrders) {
           setActiveOrders(data.activeOrders);
+        }
+        if (data.businessInfo) {
+          setBusinessInfo(data.businessInfo);
         }
         if (data.taxConfig) {
           setTaxConfig(data.taxConfig.hasTax ?? false, data.taxConfig.taxRate ?? 0);
@@ -162,7 +166,7 @@ export default function POSPage() {
   };
 
   const printUnpaidReceipt = (order: any) => {
-    printReceipt(order, { paymentStatus: "UNPAID" });
+    printReceipt(order, { paymentStatus: "UNPAID", businessInfo });
   };
 
   const handleCheckout = async () => {
@@ -370,7 +374,7 @@ export default function POSPage() {
                             body: JSON.stringify({ orderId: order.id, paymentMethod: "CASH", amountPaid: order.total })
                           });
                           if (res.ok) {
-                            printReceipt(order, { paymentStatus: "PAID" });
+                            printReceipt(order, { paymentStatus: "PAID", businessInfo });
                             fetchInitData();
                           }
                         } catch (e) { }

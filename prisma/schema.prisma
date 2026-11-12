@@ -18,6 +18,7 @@ model Restaurant {
   slug             String   @unique // Used for subdomains or login/identification
   contactEmail     String
   contactPhone     String
+  address          String?
   licenseKey       String   @unique
   subscriptionPlan String   @default("YEARLY") // MONTHLY, YEARLY, LIFETIME
   status           String   @default("ACTIVE") // ACTIVE, EXPIRED, SUSPENDED

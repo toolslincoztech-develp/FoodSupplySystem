@@ -53,7 +53,7 @@ export async function GET(req: Request) {
         const [restaurant, orders] = await Promise.all([
           prisma.restaurant.findUnique({
             where: { id: restaurantId },
-            select: { name: true, logoUrl: true, contactPhone: true }
+            select: { name: true, logoUrl: true, contactPhone: true, address: true }
           }),
           prisma.order.findMany({
             where: whereClause,
@@ -218,7 +218,8 @@ export async function GET(req: Request) {
           restaurant: {
             name: restaurant?.name || "FoodSupplyERP",
             logoUrl: restaurant?.logoUrl || null,
-            phone: restaurant?.contactPhone || null
+            phone: restaurant?.contactPhone || null,
+            address: restaurant?.address || null
           },
           date: now.toISOString(),
           scope,

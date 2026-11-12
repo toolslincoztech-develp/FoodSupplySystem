@@ -51,7 +51,7 @@ export async function GET(req: Request) {
           }),
           prisma.restaurant.findUnique({
             where: { id: restaurantId },
-            select: { hasTax: true, taxRate: true }
+            select: { name: true, contactPhone: true, address: true, logoUrl: true, hasTax: true, taxRate: true }
           })
         ]);
 
@@ -59,6 +59,12 @@ export async function GET(req: Request) {
           categories,
           menuItems,
           activeOrders,
+          businessInfo: {
+            name: restaurant?.name || "",
+            phone: restaurant?.contactPhone || "",
+            address: restaurant?.address || "",
+            logoUrl: restaurant?.logoUrl || null
+          },
           taxConfig: {
             hasTax: Boolean(restaurant?.hasTax),
             taxRate: Number(restaurant?.taxRate || 0)

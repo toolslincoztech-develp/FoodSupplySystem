@@ -16,10 +16,11 @@ import {
   Tag
 } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
-import { printReceipt } from "@/lib/receipt";
+import { printReceipt, BusinessReceiptInfo } from "@/lib/receipt";
 
 export default function BillingPage() {
   const [orders, setOrders] = useState<any[]>([]);
+  const [businessInfo, setBusinessInfo] = useState<BusinessReceiptInfo | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -57,6 +58,9 @@ export default function BillingPage() {
       if (res.ok) {
         const json = await res.json();
         setOrders(json.activeOrders || []);
+        if (json.businessInfo) {
+          setBusinessInfo(json.businessInfo);
+        }
       }
     } catch (error) {
       console.error("Failed to fetch running orders");
@@ -107,7 +111,8 @@ export default function BillingPage() {
     };
     printReceipt(orderWithBilling, {
       paymentStatus: "PAID",
-      paymentMethod
+      paymentMethod,
+      businessInfo
     });
   };
 

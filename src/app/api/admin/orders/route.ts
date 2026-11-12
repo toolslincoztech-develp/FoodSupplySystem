@@ -85,7 +85,7 @@ export async function GET(req: Request) {
           };
         }
 
-        const [orders, allOrdersForStats] = await Promise.all([
+        const [orders, allOrdersForStats, restaurant] = await Promise.all([
           prisma.order.findMany({
             where,
             include: {
@@ -107,6 +107,10 @@ export async function GET(req: Request) {
               total: true,
               payment: { select: { amount: true } }
             }
+          }),
+          prisma.restaurant.findUnique({
+            where: { id: restaurantId },
+            select: { name: true, contactPhone: true, address: true, logoUrl: true }
           })
         ]);
 
@@ -119,6 +123,12 @@ export async function GET(req: Request) {
 
         return {
           orders,
+          businessInfo: {
+            name: restaurant?.name || "",
+            phone: restaurant?.contactPhone || "",
+            address: restaurant?.address || "",
+            logoUrl: restaurant?.logoUrl || null
+          },
           summary: {
             totalOrders,
             paidOrdersCount,

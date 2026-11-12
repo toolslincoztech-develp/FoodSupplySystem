@@ -44,22 +44,38 @@ export async function GET(req: Request) {
       return NextResponse.json({ success: true, activeOrder });
     }
 
-    const activeOrders = await getOrSetCache(
+    const { activeOrders, businessInfo } = await getOrSetCache(
       tenantCacheKey(restaurantId, "orders", `pos-active:${isScopedBranch ? branchId : "all"}`),
       8_000,
-      () =>
-        prisma.order.findMany({
-          where: whereClause,
-          include: {
-            items: { include: { menuItem: true } },
-            user: { select: { name: true } }
-          },
-          orderBy: { createdAt: "desc" }
-        }),
+      async () => {
+        const [ordersList, restaurant] = await Promise.all([
+          prisma.order.findMany({
+            where: whereClause,
+            include: {
+              items: { include: { menuItem: true } },
+              user: { select: { name: true } }
+            },
+            orderBy: { createdAt: "desc" }
+          }),
+          prisma.restaurant.findUnique({
+            where: { id: restaurantId },
+            select: { name: true, contactPhone: true, address: true, logoUrl: true }
+          })
+        ]);
+        return {
+          activeOrders: ordersList,
+          businessInfo: {
+            name: restaurant?.name || "",
+            phone: restaurant?.contactPhone || "",
+            address: restaurant?.address || "",
+            logoUrl: restaurant?.logoUrl || null
+          }
+        };
+      },
       60_000
     );
 
-    return NextResponse.json({ success: true, activeOrders });
+    return NextResponse.json({ success: true, activeOrders, businessInfo });
 
   } catch (error) {
     console.error("Orders GET Error:", error);

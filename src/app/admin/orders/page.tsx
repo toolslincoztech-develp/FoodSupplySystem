@@ -21,10 +21,11 @@ import {
   Banknote
 } from "lucide-react";
 import { formatCurrency, cn } from "@/lib/utils";
-import { printReceipt } from "@/lib/receipt";
+import { printReceipt, BusinessReceiptInfo } from "@/lib/receipt";
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<any[]>([]);
+  const [businessInfo, setBusinessInfo] = useState<BusinessReceiptInfo | null>(null);
   const [summary, setSummary] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -45,6 +46,9 @@ export default function OrdersPage() {
         const json = await res.json();
         setOrders(json.data.orders || []);
         setSummary(json.data.summary || {});
+        if (json.data.businessInfo) {
+          setBusinessInfo(json.data.businessInfo);
+        }
       }
     } catch (error) {
       console.error("Failed to fetch orders", error);
@@ -426,7 +430,7 @@ export default function OrdersPage() {
             {/* Modal Actions */}
             <div className="border-t border-border pt-4 flex gap-3">
               <button
-                onClick={() => printReceipt(selectedOrder)}
+                onClick={() => printReceipt(selectedOrder, { businessInfo })}
                 className="btn btn-secondary flex-1 py-2 text-xs font-bold flex items-center justify-center gap-2 rounded-xl"
               >
                 <Printer size={15} /> Print Receipt
